@@ -1,0 +1,120 @@
+{
+  "title": "SANDI Energy Manager",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Přiřazení entit",
+        "description": "Vyber entity svého Home Assistantu. Po přidání běží regulátor v náhledu.",
+        "data": {
+          "pv": "Výroba FVE",
+          "eps": "Odběr EPS",
+          "overload": "Okamžitý činný výkon EPS",
+          "soc": "Nabití domácí baterie",
+          "eta": "Odhad do nabití baterie v minutách",
+          "ev_power": "Odběr nabíječky",
+          "ev_status": "Stav nabíječky",
+          "connected": "Auto připojeno",
+          "tariff": "Signál nízkého tarifu HDO",
+          "solar_enabled": "Režim FVE",
+          "night_enabled": "Režim nízkého tarifu",
+          "source": "Sonoff přepínač zdroje",
+          "session": "Spínač nabíjecí relace",
+          "current": "Nastavení nabíjecího proudu",
+          "boiler": "Termostat bojleru"
+        }
+      },
+      "reconfigure": {
+        "title": "Změna entit",
+        "data": {
+          "pv": "Výroba FVE",
+          "eps": "Odběr EPS",
+          "overload": "Okamžitý činný výkon EPS",
+          "soc": "Nabití domácí baterie",
+          "eta": "Odhad do nabití baterie v minutách",
+          "ev_power": "Odběr nabíječky",
+          "ev_status": "Stav nabíječky",
+          "connected": "Auto připojeno",
+          "tariff": "Signál nízkého tarifu HDO",
+          "solar_enabled": "Režim FVE",
+          "night_enabled": "Režim nízkého tarifu",
+          "source": "Sonoff přepínač zdroje",
+          "session": "Spínač nabíjecí relace",
+          "current": "Nastavení nabíjecího proudu",
+          "boiler": "Termostat bojleru"
+        }
+      }
+    },
+    "error": {
+      "entities_conflict": "Sonoff a spínač nabíjecí relace musí být dvě různé entity."
+    },
+    "abort": {
+      "already_configured": "Regulátor už je přidaný.",
+      "reconfigure_successful": "Entity byly aktualizovány."
+    }
+  },
+  "options": {
+    "step": {
+      "operating": {
+        "title": "Provozní nastavení",
+        "description": "V náhledu nech všechny volby řízení vypnuté. Číslo 1 je nejvyšší priorita.",
+        "data": {
+          "control_ev": "Řídit nabíjecí relaci a proud",
+          "control_source": "Automaticky přepínat Sonoff",
+          "sonoff_on_is_solar": "Stav zapnuto na Sonoffu znamená FVE",
+          "control_boiler": "Řídit bojler",
+          "phases": "Počet fází (1 nebo 3)",
+          "solar_max_a": "Maximální proud z FVE (A)",
+          "night_a": "Proud v nízkém tarifu (A)",
+          "pv_reserve_w": "Rezerva FV výkonu (W)",
+          "inverter_limit_w": "Limit EPS (W)",
+          "power_max_age_s": "Maximální stáří měření výkonu (s)",
+          "control_outlets": "Řídit solární zásuvky",
+          "ev_priority": "Priorita Enyaqu na FVE",
+          "boiler_priority": "Priorita bojleru",
+          "outlet_priority": "Priorita skupiny zásuvek",
+          "boiler_w": "Příkon topného tělesa bojleru (W)"
+        },
+        "data_description": {
+          "control_source": "Zapni až po ověření poloh Sonoffu a hardwarového blokování obou zdrojů proti propojení."
+        }
+      },
+      "init": {
+        "title": "Nastavení regulátoru",
+        "menu_options": {
+          "operating": "Limity, priority a aktivace",
+          "add_outlet": "Přidat solární zásuvku",
+          "edit_outlet": "Upravit zásuvku",
+          "remove_outlet": "Odebrat zásuvku"
+        }
+      },
+      "outlet": {
+        "title": "Solární zásuvka",
+        "description": "Vyber zásuvku na EPS. Nastav příkon připojeného spotřebiče a dobu, po kterou má zásuvka zůstat zapnutá nebo vypnutá.",
+        "data": {
+          "entity": "Zásuvka",
+          "enabled": "Zařadit do automatického řízení",
+          "priority": "Priorita zásuvky (1 je nejvyšší)",
+          "watts": "Příkon spotřebiče (W)",
+          "min_on_s": "Minimální doba zapnutí (s)",
+          "min_off_s": "Minimální doba vypnutí (s)"
+        }
+      },
+      "edit_outlet": {
+        "title": "Upravit zásuvku",
+        "data": {
+          "entity": "Zásuvka"
+        }
+      },
+      "remove_outlet": {
+        "title": "Odebrat zásuvku",
+        "data": {
+          "entity": "Zásuvka"
+        }
+      }
+    },
+    "error": {
+      "source_requires_ev": "Pro přepínání Sonoffu musí být povoleno řízení nabíjení.",
+      "outlet_reserved": "Zásuvka už je přidaná nebo slouží k řízení nabíječky či Sonoffu."
+    }
+  }
+}

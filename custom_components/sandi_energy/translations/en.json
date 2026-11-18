@@ -1,0 +1,120 @@
+{
+  "title": "SANDI Energy Manager",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Map the entities",
+        "description": "Select the entities from your own Home Assistant. The controller starts in preview mode.",
+        "data": {
+          "pv": "PV production",
+          "eps": "EPS load",
+          "overload": "Immediate EPS active power",
+          "soc": "Home battery state of charge",
+          "eta": "Battery charge ETA in minutes",
+          "ev_power": "EV charger power",
+          "ev_status": "EV charger status",
+          "connected": "Car connected",
+          "tariff": "Low tariff signal",
+          "solar_enabled": "Solar mode helper",
+          "night_enabled": "Low tariff mode helper",
+          "source": "Sonoff power source selector",
+          "session": "Charging session switch",
+          "current": "Charging current setpoint",
+          "boiler": "Water heater thermostat"
+        }
+      },
+      "reconfigure": {
+        "title": "Change entity mapping",
+        "data": {
+          "pv": "PV production",
+          "eps": "EPS load",
+          "overload": "Immediate EPS active power",
+          "soc": "Home battery state of charge",
+          "eta": "Battery charge ETA in minutes",
+          "ev_power": "EV charger power",
+          "ev_status": "EV charger status",
+          "connected": "Car connected",
+          "tariff": "Low tariff signal",
+          "solar_enabled": "Solar mode helper",
+          "night_enabled": "Low tariff mode helper",
+          "source": "Sonoff power source selector",
+          "session": "Charging session switch",
+          "current": "Charging current setpoint",
+          "boiler": "Water heater thermostat"
+        }
+      }
+    },
+    "error": {
+      "entities_conflict": "Sonoff and the charging session switch must be different entities."
+    },
+    "abort": {
+      "already_configured": "The controller is already configured.",
+      "reconfigure_successful": "Entity mapping updated."
+    }
+  },
+  "options": {
+    "step": {
+      "operating": {
+        "title": "Operating settings",
+        "description": "Leave all controls off for preview. Priority 1 is the highest.",
+        "data": {
+          "control_ev": "Control charging session and current",
+          "control_source": "Automatically select the Sonoff source",
+          "sonoff_on_is_solar": "Sonoff on means solar power",
+          "control_boiler": "Control the water heater",
+          "phases": "Phase count (1 or 3)",
+          "solar_max_a": "Maximum solar charging current (A)",
+          "night_a": "Low tariff charging current (A)",
+          "pv_reserve_w": "PV power reserve (W)",
+          "inverter_limit_w": "EPS power limit (W)",
+          "power_max_age_s": "Maximum age of power telemetry (s)",
+          "control_outlets": "Control solar outlets",
+          "ev_priority": "Solar EV priority",
+          "boiler_priority": "Water heater priority",
+          "outlet_priority": "Outlet group priority",
+          "boiler_w": "Water heater element power (W)"
+        },
+        "data_description": {
+          "control_source": "Enable after verifying the Sonoff positions and that transfer hardware interlocks the two sources."
+        }
+      },
+      "init": {
+        "title": "Controller settings",
+        "menu_options": {
+          "operating": "Limits, priorities and enable controls",
+          "add_outlet": "Add a solar outlet",
+          "edit_outlet": "Edit an outlet",
+          "remove_outlet": "Remove an outlet"
+        }
+      },
+      "outlet": {
+        "title": "Solar outlet",
+        "description": "Select an outlet on EPS. Enter the appliance load and how long the outlet should stay on or off.",
+        "data": {
+          "entity": "Outlet",
+          "enabled": "Include in automatic control",
+          "priority": "Outlet priority (1 is highest)",
+          "watts": "Appliance power (W)",
+          "min_on_s": "Minimum on time (s)",
+          "min_off_s": "Minimum off time (s)"
+        }
+      },
+      "edit_outlet": {
+        "title": "Edit an outlet",
+        "data": {
+          "entity": "Outlet"
+        }
+      },
+      "remove_outlet": {
+        "title": "Remove an outlet",
+        "data": {
+          "entity": "Outlet"
+        }
+      }
+    },
+    "error": {
+      "source_requires_ev": "Enable charging control before enabling source switching.",
+      "outlet_reserved": "This switch is already an outlet or is reserved for EV or source control."
+    }
+  }
+}

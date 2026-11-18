@@ -1,0 +1,21 @@
+{
+  "domain": "sandi_energy",
+  "name": "SANDI Energy Manager",
+  "after_dependencies": [
+    "binary_sensor",
+    "climate",
+    "input_boolean",
+    "number",
+    "sensor",
+    "switch"
+  ],
+  "config_flow": true,
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "version": "0.1.0",
+  "documentation": "https://github.com/vsajer/sandi-energy-manager-marketplace",
+  "issue_tracker": "https://github.com/vsajer/sandi-energy-manager-marketplace/issues",
+  "codeowners": [
+    "@vsajer"
+  ]
+}

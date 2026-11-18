@@ -1,0 +1,148 @@
+title: Energie domu
+views:
+  - title: Energie domu
+    path: prehled
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Fotovoltaika
+            icon: mdi:solar-power-variant
+          - type: tile
+            entity: sensor.example_energy_pv
+            name: Výroba FVE
+          - type: tile
+            entity: sensor.example_energy_overload
+            name: Odběr EPS
+          - type: tile
+            entity: sensor.example_energy_soc
+            name: Domácí baterie
+          - type: tile
+            entity: sensor.example_energy_eta
+            name: Odhad do nabití
+          - type: history-graph
+            title: Výkon za posledních 6 hodin
+            hours_to_show: 6
+            entities:
+              - entity: sensor.example_energy_pv
+                name: FVE
+              - entity: sensor.example_energy_overload
+                name: EPS
+              - entity: sensor.example_energy_ev_power
+                name: Nabíječka
+      - type: grid
+        cards:
+          - type: heading
+            heading: Enyaq
+            icon: mdi:ev-station
+          - type: tile
+            entity: input_boolean.example_energy_solar_enabled
+            name: Nabíjet z FVE
+          - type: tile
+            entity: input_boolean.example_energy_night_enabled
+            name: Nabíjet v nízkém tarifu
+          - type: entities
+            entities:
+              - entity: binary_sensor.example_energy_tariff
+                name: Nízký tarif HDO
+              - entity: binary_sensor.example_energy_connected
+                name: Auto připojeno
+              - entity: sensor.example_energy_ev_status
+                name: Stav nabíječky
+              - type: attribute
+                entity: sensor.sandi_energy_ev
+                attribute: actual_source
+                name: Zdroj podle Sonoffu
+              - type: attribute
+                entity: sensor.sandi_energy_ev
+                attribute: current_setpoint_a
+                name: Nastavený proud
+                suffix: A
+              - type: attribute
+                entity: sensor.sandi_energy_ev
+                attribute: target_current_a
+                name: Cílový proud regulátoru
+                suffix: A
+              - type: attribute
+                entity: sensor.sandi_energy_ev
+                attribute: available_w
+                name: Dostupný výkon pro auto
+                suffix: W
+          - type: markdown
+            content: >-
+              **{{ 'Řízení nabíjení aktivní' if
+              state_attr('sensor.sandi_energy_ev', 'control_enabled') else 'Náhled nabíjení' }}**
+
+              {{ state_attr('sensor.sandi_energy_ev', 'reason') or 'Čekám na regulátor.' }}
+
+              {% if state_attr('sensor.sandi_energy_ev', 'last_error') %}
+              Chyba povelu — {{ state_attr('sensor.sandi_energy_ev', 'last_error') }}
+              {% endif %}
+      - type: grid
+        cards:
+          - type: heading
+            heading: Bojler
+            icon: mdi:water-boiler
+          - type: entities
+            entities:
+              - entity: climate.example_energy_boiler
+                name: Termostat bojleru
+              - type: attribute
+                entity: sensor.sandi_energy_boiler
+                attribute: target_preset
+                name: Plánovaný režim
+          - type: markdown
+            content: >-
+              **{{ 'Řízení bojleru aktivní' if
+              state_attr('sensor.sandi_energy_boiler', 'control_enabled') else 'Náhled bojleru' }}**
+
+              {{ state_attr('sensor.sandi_energy_boiler', 'reason') or 'Čekám na regulátor.' }}
+
+              {% if state_attr('sensor.sandi_energy_boiler', 'last_error') %}
+              Chyba povelu — {{ state_attr('sensor.sandi_energy_boiler', 'last_error') }}
+              {% endif %}
+          - type: button
+            name: Nastavení integrací
+            icon: mdi:cog-outline
+            tap_action:
+              action: navigate
+              navigation_path: /config/integrations
+      - type: grid
+        cards:
+          - type: heading
+            heading: Solární zásuvky
+            icon: mdi:power-socket-eu
+          - type: markdown
+            content: |
+              **{{ 'Řízení zásuvek aktivní' if state_attr('sensor.sandi_energy_outlets', 'control_enabled') else 'Náhled zásuvek' }}**
+
+              {{ state_attr('sensor.sandi_energy_outlets', 'reason') or 'Čekám na regulátor.' }}
+
+              {% set outlets = state_attr('sensor.sandi_energy_outlets', 'outlets') or [] %}
+              {% if outlets %}
+              | Pořadí | Zásuvka | Příkon | Stav | Cíl |
+              | --- | --- | ---: | --- | --- |
+              {% for item in outlets -%}
+              | {{ item.priority }} | {{ state_attr(item.entity, 'friendly_name') or item.entity }} | {{ item.watts }} W | {{ 'zapnuto' if item.on else 'vypnuto' if item.on == false else 'nedostupná' }} | {{ 'ručně' if not item.enabled else 'zapnout' if item.target_on else 'vypnout' }} |
+              {% endfor %}
+              {% for item in outlets if item.error %}
+              **{{ item.entity }}** — {{ item.error }}
+              {% endfor %}
+              {% endif %}
+          - type: entities
+            title: Pořadí skupin
+            entities:
+              - type: attribute
+                entity: sensor.sandi_energy_outlets
+                attribute: ev_priority
+                name: Enyaq na FVE
+              - type: attribute
+                entity: sensor.sandi_energy_outlets
+                attribute: boiler_priority
+                name: Bojler
+              - type: attribute
+                entity: sensor.sandi_energy_outlets
+                attribute: priority
+                name: Skupina zásuvek
