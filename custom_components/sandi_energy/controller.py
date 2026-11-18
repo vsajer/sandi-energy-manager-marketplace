@@ -25,12 +25,12 @@ class EnergyController:
         self.entry = entry
         self.entities = dict(entry.data)
         self.config = {**CONTROL_DEFAULTS, **entry.options}
-        reserved = {self.entities["source"], self.entities["session"]}
-        self.outlet_settings = [item for item in entry.options.get("outlets", [])
-                                if item["entity"].startswith("switch.") and item["entity"] not in reserved]
+        self.outlet_settings = self._allowed_outlets(entry.options.get("outlets", []))
         self.listeners = []
         self.diagnostics = {"ev": {}, "boiler": {}, "outlets": {}}
-        self._subscriptions = []
+        self._unsubscribe_states = None
+        self._unsubscribe_tick = None
+        self._outlet_generation = 0
         self._task = None
         self._pending = False
         self._running = False
@@ -52,17 +52,39 @@ class EnergyController:
     @callback
     def start(self, _hass):
         self._running = True
+        self._watch_states()
+        self._unsubscribe_tick = async_track_time_interval(self.hass, self._request, timedelta(seconds=5))
+        self._request()
+
+    def _allowed_outlets(self, outlets):
+        reserved = {self.entities["source"], self.entities["session"]}
+        return [item for item in outlets if item["entity"].startswith("switch.") and item["entity"] not in reserved]
+
+    @callback
+    def _watch_states(self):
+        if self._unsubscribe_states is not None:
+            self._unsubscribe_states()
         watched = set(self.entities.values()) | {item["entity"] for item in self.outlet_settings}
-        self._subscriptions = [
-            async_track_state_change_event(self.hass, watched, self._request),
-            async_track_time_interval(self.hass, self._request, timedelta(seconds=5)),
-        ]
+        self._unsubscribe_states = async_track_state_change_event(self.hass, watched, self._request)
+
+    @callback
+    def apply_outlets(self, outlets):
+        """Apply panel changes without restarting EV or boiler control."""
+        self.outlet_settings = self._allowed_outlets(outlets)
+        self._outlet_generation += 1
+        self._outlet_ready = None
+        if self._running:
+            self._watch_states()
         self._request()
 
     async def stop(self):
         self._running = False
-        for unsubscribe in self._subscriptions:
-            unsubscribe()
+        if self._unsubscribe_states is not None:
+            self._unsubscribe_states()
+            self._unsubscribe_states = None
+        if self._unsubscribe_tick is not None:
+            self._unsubscribe_tick()
+            self._unsubscribe_tick = None
         if self._task is not None:
             # Drain the in-flight service before Home Assistant reloads the entry.
             await asyncio.gather(self._task, return_exceptions=True)
@@ -152,6 +174,7 @@ class EnergyController:
         return True
 
     async def _evaluate(self):
+        outlet_generation = self._outlet_generation
         source = self._flag("source")
         data = EVInput(
             solar=self._flag("solar_enabled"), night=self._flag("night_enabled"),
@@ -210,7 +233,8 @@ class EnergyController:
                                 if k in self._errors), None),
         })
         await self._evaluate_boiler(boiler_demand, boiler_allowed, preset)
-        await self._evaluate_outlets(outlets, outlet_plan)
+        if outlet_generation == self._outlet_generation:
+            await self._evaluate_outlets(outlets, outlet_plan)
 
     def _adds_ev_load(self, action):
         key, service, fields = action

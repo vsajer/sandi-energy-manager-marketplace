@@ -1,7 +1,7 @@
 {
   "domain": "sandi_energy",
   "name": "SANDI Energy Manager",
-  "dependencies": ["frontend", "http", "panel_custom"],
+  "dependencies": ["frontend", "http", "panel_custom", "websocket_api"],
   "after_dependencies": [
     "binary_sensor",
     "climate",
@@ -13,7 +13,7 @@
   "config_flow": true,
   "integration_type": "service",
   "iot_class": "calculated",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "documentation": "https://github.com/vsajer/sandi-energy-manager-marketplace",
   "issue_tracker": "https://github.com/vsajer/sandi-energy-manager-marketplace/issues",
   "codeowners": [

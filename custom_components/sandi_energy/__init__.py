@@ -9,8 +9,9 @@ from homeassistant.const import Platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.start import async_at_started
 
-from .const import DOMAIN
+from .const import DOMAIN, VERSION
 from .controller import EnergyController
+from .panel_api import async_register_commands
 
 PLATFORMS = [Platform.SENSOR]
 PANEL_PATH = "sandi-energy"
@@ -22,6 +23,7 @@ async def async_setup(hass, config):
     await hass.http.async_register_static_paths([
         StaticPathConfig(PANEL_ASSET, str(Path(__file__).with_name("energy-panel.js")), False)
     ])
+    async_register_commands(hass)
     return True
 
 
@@ -40,8 +42,9 @@ async def async_setup_entry(hass, entry):
         webcomponent_name="sandi-energy-panel",
         sidebar_title="Energie domu",
         sidebar_icon="mdi:solar-power",
-        module_url=f"{PANEL_ASSET}?v=0.2.0",
+        module_url=f"{PANEL_ASSET}?v={VERSION}",
         config={
+            "entry_id": entry.entry_id,
             "entities": dict(entry.data),
             "diagnostics": diagnostics,
             "eps_limit_w": controller.config["inverter_limit_w"],

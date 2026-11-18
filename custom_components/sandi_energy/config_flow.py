@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigFlow, OptionsFlowWithReload
 from homeassistant.core import callback
 from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig
 
-from .const import CONTROL_DEFAULTS, DOMAIN, ENTITY_DOMAINS
+from .const import CONTROL_DEFAULTS, DOMAIN, ENTITY_DOMAINS, OUTLET_DEFAULTS, OUTLET_RANGES
 
 
 def entity_schema(values: dict):
@@ -82,7 +82,7 @@ class SandiOptionsFlow(OptionsFlowWithReload):
         errors = {}
         if user_input is not None:
             if not user_input["control_source"] or user_input["control_ev"]:
-                return self.async_create_entry(data={**self._saved, **user_input})
+                return self.async_create_entry(data={**self.config_entry.options, **user_input})
             errors["control_source"] = "source_requires_ev"
 
         values = {**CONTROL_DEFAULTS, **self._saved, **(user_input or {})}
@@ -104,7 +104,8 @@ class SandiOptionsFlow(OptionsFlowWithReload):
 
     async def async_step_remove_outlet(self, user_input=None):
         if user_input is not None:
-            return self._save_outlets([x for x in self._outlets if x["entity"] != user_input["entity"]])
+            current = self.config_entry.options.get("outlets", [])
+            return self._save_outlets([x for x in current if x["entity"] != user_input["entity"]])
         return self._pick_outlet("remove_outlet")
 
     def _pick_outlet(self, step):
@@ -114,11 +115,11 @@ class SandiOptionsFlow(OptionsFlowWithReload):
         }))
 
     def _save_outlets(self, outlets):
-        return self.async_create_entry(data={**self._saved, "outlets": outlets})
+        return self.async_create_entry(data={**self.config_entry.options, "outlets": outlets})
 
     async def async_step_outlet(self, user_input=None):
         errors = {}
-        other = [x for x in self._outlets if x["entity"] != self._selected]
+        other = [x for x in self.config_entry.options.get("outlets", []) if x["entity"] != self._selected]
         if user_input is not None:
             reserved = {self.config_entry.data["session"], self.config_entry.data["source"]}
             if user_input["entity"] in reserved | {x["entity"] for x in other}:
@@ -131,10 +132,9 @@ class SandiOptionsFlow(OptionsFlowWithReload):
         schema = vol.Schema({
             vol.Required("entity"): EntitySelector(EntitySelectorConfig(domain="switch")),
             vol.Required("enabled", default=True): bool,
-            vol.Required("priority", default=10): vol.All(vol.Coerce(int), vol.Range(min=1, max=999)),
-            vol.Required("watts", default=500): vol.All(vol.Coerce(int), vol.Range(min=1, max=20000)),
-            vol.Required("min_on_s", default=120): vol.All(vol.Coerce(int), vol.Range(min=0, max=86400)),
-            vol.Required("min_off_s", default=60): vol.All(vol.Coerce(int), vol.Range(min=0, max=86400)),
+            **{vol.Required(key, default=OUTLET_DEFAULTS[key]): vol.All(
+                vol.Coerce(int), vol.Range(min=minimum, max=maximum)
+            ) for key, (minimum, maximum) in OUTLET_RANGES.items()},
         })
         return self.async_show_form(
             step_id="outlet", data_schema=self.add_suggested_values_to_schema(schema, values),

@@ -62,9 +62,31 @@ const layout = `
     th, td { padding: 8px 9px 8px 0; border-bottom: 1px solid var(--energy-line); }
     td { font-size: 14px; }
     th:first-child { min-width: 115px; }
+    .outlet-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .action { padding: 8px 12px; border-radius: 9px; background: transparent; border: 1px solid var(--energy-line); }
+    .action.primary { background: var(--energy-accent); color: var(--text-primary-color, white); border-color: transparent; }
+    .action.remove { color: var(--error-color, #b62222); }
+    .action:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--energy-accent); outline-offset: 2px; }
+    .action:disabled { opacity: .6; cursor: wait; }
+    .outlet-form { margin-top: 16px; border-top: 1px solid var(--energy-line); padding-top: 14px; }
+    .form-grid { display: grid; grid-template-columns: repeat(4, minmax(90px, 1fr)); gap: 10px; margin-top: 12px; }
+    .picker { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 10px; margin-top: 12px; }
+    label { display: grid; gap: 5px; min-width: 0; font-size: 13px; }
+    input, select { box-sizing: border-box; width: 100%; color: inherit; font: inherit;
+      padding: 8px; border: 1px solid var(--energy-line); border-radius: 7px; background: var(--energy-surface); }
+    .enabled { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+    .enabled input { width: auto; }
+    .form-footer { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .form-footer .remove { margin-inline-start: auto; }
+    .message { color: var(--secondary-text-color); }
+    .message:empty { display: none; }
+    .message[data-error] { color: var(--error-color, #b62222); }
+    [hidden] { display: none !important; }
     @media (max-width: 720px) {
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .detail { grid-template-columns: minmax(0, 1fr); }
+      .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .picker { grid-template-columns: minmax(0, 1fr); }
       main { padding: 14px 10px 24px; }
     }
   </style>
@@ -107,12 +129,35 @@ const layout = `
         <p class="hint" data-field="boiler_reason"></p><p class="error" data-field="boiler_error" hidden></p>
       </section>
       <section class="card full">
-        <div class="panel-heading"><ha-icon icon="mdi:power-socket-eu"></ha-icon><h2>Solární zásuvky</h2></div>
+        <div class="outlet-heading">
+          <div class="panel-heading"><ha-icon icon="mdi:power-socket-eu"></ha-icon><h2>Solární zásuvky</h2></div>
+          <button type="button" class="action primary add-outlet">Přidat zásuvku</button>
+        </div>
         <dl><div><dt>Priorita skupiny</dt><dd data-field="outlet_priority"></dd></div></dl>
         <p class="hint" data-field="outlet_reason"></p>
         <div class="table-wrap" hidden>
-          <table><thead><tr><th>Zásuvka</th><th>Priorita</th><th>Příkon</th><th>Stav</th><th>Cíl</th></tr></thead><tbody></tbody></table>
+          <table><thead><tr><th>Zásuvka</th><th>Priorita</th><th>Příkon</th><th>Stav</th><th>Cíl</th><th>Úpravy</th></tr></thead><tbody></tbody></table>
         </div>
+        <form class="outlet-form" hidden>
+          <h3 class="form-title"></h3>
+          <div class="picker">
+            <label>Vyhledat zařízení <input type="search" name="search" placeholder="Název nebo ID entity"></label>
+            <label>Zásuvka nebo spínač <select name="entity" required></select></label>
+          </div>
+          <div class="form-grid">
+            <label>Priorita (1 je nejvyšší) <input type="number" name="priority" min="1" max="999" required></label>
+            <label>Příkon (W) <input type="number" name="watts" min="1" max="20000" required></label>
+            <label>Min. zapnutí (s) <input type="number" name="min_on_s" min="0" max="86400" required></label>
+            <label>Min. vypnutí (s) <input type="number" name="min_off_s" min="0" max="86400" required></label>
+          </div>
+          <label class="enabled"><input type="checkbox" name="enabled"> Zařadit do automatického řízení FVE</label>
+          <div class="form-footer">
+            <button type="submit" class="action primary">Uložit zásuvku</button>
+            <button type="button" class="action cancel-outlet">Zrušit</button>
+            <button type="button" class="action remove remove-outlet" hidden>Odebrat z řízení</button>
+          </div>
+        </form>
+        <p class="message" role="status"></p>
       </section>
     </div>
   </main>`;
@@ -121,6 +166,7 @@ const evModes = { manual: "Ruční", waiting: "Čeká", solar: "FVE", night: "N�
 const boilerModes = { off: "Vypnutý", heat: "Topení", auto: "Automaticky" };
 const presets = { activity: "Aktivní", eco: "Úsporný", sleep: "Útlum" };
 const unavailable = ["unknown", "unavailable"];
+const outletNumbers = ["priority", "watts", "min_on_s", "min_off_s"];
 
 function quantity(value, unit) {
   if (value == null || value === "" || !Number.isFinite(Number(value))) return "—";
@@ -143,6 +189,25 @@ class SandiEnergyPanel extends HTMLElement {
     this.meter = root.querySelector("progress");
     this.table = root.querySelector(".table-wrap");
     this.rows = root.querySelector("tbody");
+    this.form = root.querySelector(".outlet-form");
+    this.formTitle = root.querySelector(".form-title");
+    this.addOutlet = root.querySelector(".add-outlet");
+    this.removeOutlet = root.querySelector(".remove-outlet");
+    this.message = root.querySelector(".message");
+    this.picker = root.querySelector(".picker");
+    this.controls = this.form.elements;
+    this.addOutlet.addEventListener("click", () => this.openOutlet());
+    this.controls.search.addEventListener("input", () => this.fillPicker());
+    this.form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.saveOutlet(false);
+    });
+    this.removeOutlet.addEventListener("click", () => this.saveOutlet(true));
+    root.querySelector(".cancel-outlet").addEventListener("click", () => {
+      this.form.hidden = true;
+      this.setMessage("");
+      this.addOutlet.focus();
+    });
     root.querySelector(".menu").addEventListener("click", () => {
       this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
     });
@@ -164,6 +229,110 @@ class SandiEnergyPanel extends HTMLElement {
   set panel(value) {
     this.panelConfig = value?.config;
     this.queueUpdate();
+  }
+
+  setMessage(text, error = false) {
+    this.message.textContent = text;
+    this.message.toggleAttribute("data-error", error);
+  }
+
+  callSettings(type, changes = {}) {
+    return this.currentHass.callWS({ type, entry_id: this.panelConfig.entry_id, ...changes });
+  }
+
+  async openOutlet(entity) {
+    if (this.settingsBusy) return;
+    this.settingsBusy = true;
+    this.addOutlet.disabled = true;
+    this.setMessage("Načítám nastavení zásuvek…");
+    try {
+      this.settings = await this.callSettings("sandi_energy/outlets");
+      this.selectedOutlet = this.settings.outlets.find((item) => item.entity === entity) ?? null;
+      if (entity && !this.selectedOutlet) throw new Error("Zásuvka už není v seznamu.");
+      const fields = this.selectedOutlet ?? this.settings.defaults;
+      for (const key of outletNumbers) this.controls[key].value = fields[key];
+      this.controls.enabled.checked = fields.enabled;
+      this.controls.search.value = "";
+      this.controls.entity.replaceChildren();
+      this.controls.entity.disabled = Boolean(this.selectedOutlet);
+      this.picker.hidden = Boolean(this.selectedOutlet);
+      this.removeOutlet.hidden = !this.selectedOutlet;
+      this.formTitle.textContent = this.selectedOutlet ? this.outletLabel(entity) : "Přidat zásuvku";
+      if (!this.selectedOutlet) this.fillPicker();
+      this.form.hidden = false;
+      this.setMessage("");
+      (this.selectedOutlet ? this.controls.priority : this.controls.search).focus();
+    } catch (err) {
+      this.setMessage(err.message || "Nastavení se nepodařilo načíst.", true);
+    } finally {
+      this.settingsBusy = false;
+      this.addOutlet.disabled = false;
+    }
+  }
+
+  outletLabel(entity) {
+    return this.currentHass?.states[entity]?.attributes.friendly_name || entity;
+  }
+
+  fillPicker() {
+    const select = this.controls.entity;
+    const previous = select.value;
+    const search = this.controls.search.value.trim().toLocaleLowerCase("cs");
+    const excluded = new Set([...this.settings.excluded, ...this.settings.outlets.map((item) => item.entity)]);
+    const candidates = Object.entries(this.currentHass?.states ?? {})
+      .filter(([id]) => id.startsWith("switch.") && !excluded.has(id))
+      .map(([id, state]) => ({
+        id,
+        label: this.outletLabel(id),
+        outlet: state.attributes.device_class === "outlet",
+      }))
+      .filter(({ id, label }) => (id + " " + label).toLocaleLowerCase("cs").includes(search))
+      .sort((left, right) => left.label.localeCompare(right.label, "cs") || left.id.localeCompare(right.id));
+
+    const prompt = document.createElement("option");
+    prompt.value = "";
+    prompt.textContent = candidates.length ? "Vyber zásuvku nebo spínač" : "Žádná odpovídající zařízení";
+    select.replaceChildren(prompt);
+    for (const [isOutlet, label] of [[true, "Chytré zásuvky"], [false, "Další spínače"]]) {
+      const group = document.createElement("optgroup");
+      group.label = label;
+      for (const item of candidates.filter((candidate) => candidate.outlet === isOutlet)) {
+        const option = document.createElement("option");
+        option.value = item.id;
+        option.textContent = item.label + " · " + item.id;
+        group.append(option);
+      }
+      if (group.childElementCount) select.append(group);
+    }
+    if (candidates.some((item) => item.id === previous)) select.value = previous;
+  }
+
+  async saveOutlet(remove) {
+    if (this.settingsBusy) return;
+    const entity = this.selectedOutlet?.entity ?? this.controls.entity.value;
+    if (!entity || (remove && !this.selectedOutlet)) return;
+    const settings = remove ? null : {
+      ...Object.fromEntries(outletNumbers.map((key) => [key, this.controls[key].valueAsNumber])),
+      enabled: this.controls.enabled.checked,
+    };
+    this.settingsBusy = true;
+    this.addOutlet.disabled = true;
+    this.setMessage(remove ? "Odebírám zásuvku…" : "Ukládám nastavení…");
+    try {
+      this.settings = await this.callSettings("sandi_energy/outlets/save", {
+        entity,
+        expected: this.selectedOutlet,
+        settings,
+      });
+      this.form.hidden = true;
+      this.setMessage(remove ? "Zásuvka byla odebrána z regulátoru." : "Nastavení zásuvky bylo uloženo.");
+    } catch (err) {
+      this.setMessage(err.message || "Změnu se nepodařilo uložit.", true);
+    } finally {
+      this.settingsBusy = false;
+      this.addOutlet.disabled = false;
+      if (this.form.hidden) this.addOutlet.focus();
+    }
   }
 
   queueUpdate() {
@@ -229,6 +398,7 @@ class SandiEnergyPanel extends HTMLElement {
 
   updateOutlets(outlets, states) {
     const labels = outlets.map((outlet) => [
+      outlet.entity,
       states[outlet.entity]?.attributes.friendly_name ?? outlet.entity,
       outlet.priority,
       quantity(outlet.watts, "W"),
@@ -239,12 +409,19 @@ class SandiEnergyPanel extends HTMLElement {
     if (signature === this.outletSignature) return;
     this.outletSignature = signature;
     this.table.hidden = !labels.length;
-    this.rows.replaceChildren(...labels.map((row) => {
+    this.rows.replaceChildren(...labels.map(([id, ...row]) => {
       const element = document.createElement("tr");
       for (const value of row) {
         const cell = element.insertCell();
         cell.textContent = String(value);
       }
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "action";
+      edit.textContent = "Upravit";
+      edit.setAttribute("aria-label", "Upravit " + row[0]);
+      edit.addEventListener("click", () => this.openOutlet(id));
+      element.insertCell().append(edit);
       return element;
     }));
   }
