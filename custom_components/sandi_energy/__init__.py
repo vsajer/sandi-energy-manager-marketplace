@@ -12,10 +12,19 @@ from homeassistant.helpers.start import async_at_started
 from .const import DOMAIN, VERSION
 from .controller import EnergyController
 from .panel_api import async_register_commands
+from .priority import migrate_priorities
 
 PLATFORMS = [Platform.SENSOR]
 PANEL_PATH = "sandi-energy"
 PANEL_ASSET = "/sandi_energy_assets/energy-panel.js"
+
+
+async def async_migrate_entry(hass, entry):
+    if entry.version != 1:
+        return False
+    if entry.minor_version < 2:
+        hass.config_entries.async_update_entry(entry, options=migrate_priorities(entry.options), minor_version=2)
+    return True
 
 
 async def async_setup(hass, config):

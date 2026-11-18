@@ -36,6 +36,7 @@ const layout = `
     .menu { display: none; background: none; border: 0; border-radius: 50%; padding: 8px; }
     :host([narrow]) .menu { display: inline-flex; }
     .settings { text-decoration: none; border: 1px solid currentColor; padding: 7px 12px; border-radius: 10px; white-space: nowrap; }
+    button.settings { background: transparent; cursor: pointer; }
     .settings:focus-visible, .menu:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
     main { max-width: 1180px; margin: auto; padding: 20px 18px 34px; }
     .overview { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -82,6 +83,18 @@ const layout = `
     .message:empty { display: none; }
     .message[data-error] { color: var(--error-color, #b62222); }
     .entity-id { display: block; color: var(--secondary-text-color, #516259); font-size: 12px; overflow-wrap: anywhere; }
+    .device-controls { border-top: 1px solid var(--energy-line); margin-top: 14px; padding-top: 12px; }
+    .device-controls h3, .tuning h3 { margin: 0 0 8px; font-size: 15px; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 8px; }
+    .buttons label { max-width: 180px; }
+    .action[aria-pressed="true"] { border-color: var(--energy-accent); color: var(--energy-accent); font-weight: 650; }
+    .tuning { scroll-margin-top: 72px; }
+    .tuning summary { cursor: pointer; font-size: 18px; font-weight: 650; }
+    .settings-group { margin-top: 15px; }
+    .settings-group .form-grid { margin-top: 0; }
+    .range-label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .range-label output { font-weight: 700; font-size: 15px; white-space: nowrap; }
+    input[type="range"] { padding-inline: 0; accent-color: var(--energy-accent); border: 0; }
     [hidden] { display: none !important; }
     @media (max-width: 720px) {
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -96,7 +109,7 @@ const layout = `
       <button type="button" class="menu" aria-label="Otevřít postranní nabídku"><ha-icon icon="mdi:menu"></ha-icon></button>
       <h1>Energie domu</h1>
     </div>
-    <a class="settings" href="/config/integrations/integration/sandi_energy">Nastavení</a>
+    <button type="button" class="settings open-tuning">Nastavení regulátoru</button>
   </header>
   <main>
     <div class="overview"><h2>Přehled výkonu</h2><span class="mode" data-field="control"></span></div>
@@ -118,16 +131,48 @@ const layout = `
           <div><dt>Priorita na FVE</dt><dd data-field="ev_priority"></dd></div>
         </dl>
         <p class="hint" data-field="ev_reason"></p><p class="error" data-field="ev_error" hidden></p>
+        <div class="device-controls">
+          <h3>Ovládání nabíječky</h3>
+          <div class="buttons">
+            <button type="button" class="action" data-command="solar_mode">Režim FVE</button>
+            <button type="button" class="action" data-command="night_mode">Režim nízkého tarifu</button>
+          </div>
+          <div class="buttons">
+            <label>Ruční proud (A) <input class="charge-amps" type="number" step="1" min="6" required></label>
+            <button type="button" class="action" data-command="ev_current">Nastavit proud</button>
+            <button type="button" class="action" data-command="ev_limit">Omezit na 6 A</button>
+          </div>
+          <div class="buttons">
+            <button type="button" class="action primary" data-command="ev_start">Spustit nabíjení</button>
+            <button type="button" class="action" data-command="ev_stop">Zastavit nabíjení</button>
+          </div>
+          <p class="hint" data-field="ev_manual"></p>
+          <p class="message ev-message" role="status"></p>
+        </div>
       </section>
       <section class="card">
         <div class="panel-heading"><ha-icon icon="mdi:water-boiler"></ha-icon><h2>Bojler</h2></div>
         <dl>
           <div><dt>Stav termostatu</dt><dd data-field="boiler_mode"></dd></div>
           <div><dt>Teplota vody</dt><dd data-field="temperature"></dd></div>
+          <div><dt>Preset termostatu</dt><dd data-field="boiler_preset"></dd></div>
           <div><dt>Cílový preset regulátoru</dt><dd data-field="target_preset"></dd></div>
           <div><dt>Priorita</dt><dd data-field="boiler_priority"></dd></div>
         </dl>
         <p class="hint" data-field="boiler_reason"></p><p class="error" data-field="boiler_error" hidden></p>
+        <div class="device-controls">
+          <h3>Ovládání bojleru</h3>
+          <div class="buttons">
+            <label>Preset bojleru <select class="boiler-choice" required></select></label>
+            <button type="button" class="action" data-command="boiler_preset">Nastavit preset</button>
+          </div>
+          <div class="buttons">
+            <button type="button" class="action primary" data-command="boiler_on">Zapnout bojler</button>
+            <button type="button" class="action" data-command="boiler_off">Vypnout bojler</button>
+          </div>
+          <p class="hint" data-field="boiler_manual"></p>
+          <p class="message boiler-message" role="status"></p>
+        </div>
       </section>
       <section class="card full">
         <div class="outlet-heading">
@@ -146,7 +191,8 @@ const layout = `
             <label>Zásuvka nebo spínač <select name="entity" required></select></label>
           </div>
           <div class="form-grid">
-            <label>Priorita (1 je nejvyšší) <input type="number" name="priority" min="1" max="999" required></label>
+            <label><span class="range-label">Priorita <output class="outlet-priority"></output></span>
+              <input type="range" name="priority" min="-5" max="5" step="1"></label>
             <label>Příkon (W) <input type="number" name="watts" min="1" max="20000" required></label>
             <label>Min. zapnutí (s) <input type="number" name="min_on_s" min="0" max="86400" required></label>
             <label>Min. vypnutí (s) <input type="number" name="min_off_s" min="0" max="86400" required></label>
@@ -158,10 +204,22 @@ const layout = `
             <button type="button" class="action remove remove-outlet" hidden>Odebrat z řízení</button>
           </div>
         </form>
-        <p class="message" role="status"></p>
+        <p class="message outlet-message" role="status"></p>
       </section>
+      <details class="card full tuning">
+        <summary>Limity, priority a aktivace</summary>
+        <p class="hint">Zápornou prioritu smí regulátor při nedostatku výkonu odstavit. Nula a kladná priorita chrání běžící zátěž před vypnutím kvůli pořadí. Ochrany a konec nízkého tarifu fungují dál.</p>
+        <form class="tuning-form" hidden>
+          <div class="tuning-fields"></div>
+          <p class="hint">Původní automatizace mohou ovládat stejné entity. Ruční povely jsou dostupné při vypnutém automatickém řízení daného zařízení v tomto regulátoru.</p>
+          <p class="hint">Přepínání zdroje povol až po ověření polohy Sonoffu a hardwarového blokování zdrojů.</p>
+          <div class="form-footer"><button class="action primary" type="submit">Uložit nastavení</button></div>
+        </form>
+        <p class="message tuning-message" role="status"></p>
+      </details>
       <section class="card full">
         <div class="panel-heading"><ha-icon icon="mdi:lan-connect"></ha-icon><h2>Základní entity</h2></div>
+        <p class="hint"><a href="/config/integrations/integration/sandi_energy">Přiřazení entit v nastavení integrace</a></p>
         <div class="table-wrap">
           <table><thead><tr><th>Role v regulátoru</th><th>Entita Home Assistantu</th><th>Aktuální stav</th></tr></thead><tbody class="entity-rows"></tbody></table>
         </div>
@@ -174,6 +232,29 @@ const boilerModes = { off: "Vypnutý", heat: "Topení", auto: "Automaticky" };
 const presets = { activity: "Aktivní", eco: "Úsporný", sleep: "Útlum" };
 const unavailable = ["unknown", "unavailable"];
 const outletNumbers = ["priority", "watts", "min_on_s", "min_off_s"];
+const settingGroups = [
+  ["Automatické řízení", {
+    control_ev: "Řídit nabíjecí relaci a proud",
+    control_source: "Automaticky přepínat Sonoff",
+    sonoff_on_is_solar: "Zapnutý Sonoff znamená FVE",
+    control_boiler: "Řídit bojler",
+    control_outlets: "Řídit solární zásuvky",
+  }],
+  ["Priority", {
+    ev_priority: "Nabíječka na FVE",
+    boiler_priority: "Bojler",
+    outlet_priority: "Skupina zásuvek",
+  }],
+  ["Příkony a limity", {
+    phases: "Počet fází nabíječky",
+    solar_max_a: "Maximální proud z FVE (A)",
+    night_a: "Proud v nízkém tarifu (A)",
+    pv_reserve_w: "Rezerva výkonu FVE (W)",
+    inverter_limit_w: "Limit EPS (W)",
+    boiler_w: "Příkon bojleru (W)",
+    power_max_age_s: "Maximální stáří měření (s)",
+  }],
+];
 const inputRoles = {
   pv: "Výroba FVE",
   eps: "Odběr EPS",
@@ -202,6 +283,11 @@ function stateLabel(state, labels) {
   return labels[state] ?? state;
 }
 
+function priorityLabel(value) {
+  if (value == null || value === "") return "—";
+  return value > 0 ? "+" + value : value < 0 ? "−" + Math.abs(value) : "0";
+}
+
 class SandiEnergyPanel extends HTMLElement {
   constructor() {
     super();
@@ -218,9 +304,36 @@ class SandiEnergyPanel extends HTMLElement {
     this.formTitle = root.querySelector(".form-title");
     this.addOutlet = root.querySelector(".add-outlet");
     this.removeOutlet = root.querySelector(".remove-outlet");
-    this.message = root.querySelector(".message");
+    this.message = root.querySelector(".outlet-message");
     this.picker = root.querySelector(".picker");
     this.controls = this.form.elements;
+    this.outletPriority = root.querySelector(".outlet-priority");
+    this.tuning = root.querySelector(".tuning");
+    this.tuningForm = root.querySelector(".tuning-form");
+    this.tuningFields = root.querySelector(".tuning-fields");
+    this.tuningMessage = root.querySelector(".tuning-message");
+    this.evMessage = root.querySelector(".ev-message");
+    this.boilerMessage = root.querySelector(".boiler-message");
+    this.ampInput = root.querySelector(".charge-amps");
+    this.boilerChoice = root.querySelector(".boiler-choice");
+    this.deviceButtons = [...root.querySelectorAll("[data-command]")];
+    this.deviceButtons.forEach((button) => {
+      button.addEventListener("click", () => this.sendDeviceCommand(button.dataset.command));
+    });
+    root.querySelector(".open-tuning").addEventListener("click", () => {
+      this.tuning.open = true;
+      this.tuning.scrollIntoView({ block: "start" });
+    });
+    this.tuning.addEventListener("toggle", () => {
+      if (this.tuning.open && !this.controlSnapshot) this.loadControls();
+    });
+    this.tuningForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.saveControls();
+    });
+    this.controls.priority.addEventListener("input", () => {
+      this.outletPriority.value = priorityLabel(this.controls.priority.valueAsNumber);
+    });
     this.addOutlet.addEventListener("click", () => this.openOutlet());
     this.controls.search.addEventListener("input", () => this.fillPicker());
     this.form.addEventListener("submit", (event) => {
@@ -257,8 +370,12 @@ class SandiEnergyPanel extends HTMLElement {
   }
 
   setMessage(text, error = false) {
-    this.message.textContent = text;
-    this.message.toggleAttribute("data-error", error);
+    this.report(this.message, text, error);
+  }
+
+  report(element, text, error = false) {
+    element.textContent = text;
+    element.toggleAttribute("data-error", error);
   }
 
   callSettings(type, changes = {}) {
@@ -276,6 +393,7 @@ class SandiEnergyPanel extends HTMLElement {
       if (entity && !this.selectedOutlet) throw new Error("Zásuvka už není v seznamu.");
       const fields = this.selectedOutlet ?? this.settings.defaults;
       for (const key of outletNumbers) this.controls[key].value = fields[key];
+      this.outletPriority.value = priorityLabel(fields.priority);
       this.controls.enabled.checked = fields.enabled;
       this.controls.search.value = "";
       this.controls.entity.replaceChildren();
@@ -293,6 +411,170 @@ class SandiEnergyPanel extends HTMLElement {
       this.settingsBusy = false;
       this.addOutlet.disabled = false;
     }
+  }
+
+  async loadControls() {
+    this.report(this.tuningMessage, "Načítám nastavení…");
+    try {
+      const settings = await this.callSettings("sandi_energy/controls");
+      this.drawControls(settings);
+      this.report(this.tuningMessage, "");
+    } catch (err) {
+      this.report(this.tuningMessage, err.message || "Nastavení se nepodařilo načíst.", true);
+    }
+  }
+
+  drawControls({ values, ranges }) {
+    this.controlSnapshot = values;
+    this.tuningFields.replaceChildren(...settingGroups.map(([title, entries]) => {
+      const group = document.createElement("div");
+      group.className = "settings-group";
+      const heading = document.createElement("h3");
+      heading.textContent = title;
+      const fields = document.createElement("div");
+      fields.className = "form-grid";
+      for (const [key, labelText] of Object.entries(entries)) {
+        const label = document.createElement("label");
+        const input = document.createElement(key === "phases" ? "select" : "input");
+        input.name = key;
+        if (key === "phases") {
+          for (const count of [1, 3]) {
+            const option = document.createElement("option");
+            option.value = count;
+            option.textContent = String(count);
+            input.append(option);
+          }
+        } else if (typeof values[key] === "boolean") {
+          input.type = "checkbox";
+          input.checked = values[key];
+          label.className = "enabled";
+        } else {
+          input.type = key.endsWith("_priority") ? "range" : "number";
+          [input.min, input.max] = ranges[key];
+          input.step = "1";
+          input.required = true;
+        }
+        input.value = values[key];
+        const caption = document.createElement("span");
+        caption.textContent = labelText;
+        if (input.type === "range") {
+          const output = document.createElement("output");
+          output.value = priorityLabel(values[key]);
+          caption.className = "range-label";
+          caption.append(output);
+          input.addEventListener("input", () => { output.value = priorityLabel(input.valueAsNumber); });
+        }
+        if (input.type === "checkbox") label.append(input, caption);
+        else label.append(caption, input);
+        fields.append(label);
+      }
+      group.append(heading, fields);
+      return group;
+    }));
+    this.tuningForm.hidden = false;
+  }
+
+  async saveControls() {
+    if (this.savingControls) return;
+    const elements = this.tuningForm.elements;
+    const settings = Object.fromEntries(Object.entries(this.controlSnapshot).map(([key, value]) => [
+      key, typeof value === "boolean" ? elements[key].checked : Number(elements[key].value),
+    ]));
+    this.savingControls = true;
+    const button = this.tuningForm.querySelector("button[type=submit]");
+    button.disabled = true;
+    try {
+      this.drawControls(await this.callSettings("sandi_energy/controls/save", {
+        expected: this.controlSnapshot, settings,
+      }));
+      this.report(this.tuningMessage, "Nastavení regulátoru bylo uloženo.");
+    } catch (err) {
+      this.report(this.tuningMessage, err.message || "Nastavení se nepodařilo uložit.", true);
+      if (err.code === "conflict") this.controlSnapshot = null;
+    } finally {
+      this.savingControls = false;
+      button.disabled = false;
+    }
+  }
+
+  async sendDeviceCommand(command) {
+    if (this.commandPending) return;
+    const message = command.startsWith("boiler_") ? this.boilerMessage : this.evMessage;
+    const entities = this.panelConfig.entities;
+    const states = this.currentHass.states;
+    let value;
+    if (command === "ev_current") {
+      if (!this.ampInput.reportValidity()) return;
+      value = this.ampInput.valueAsNumber;
+    } else if (command === "ev_limit") {
+      command = "ev_current";
+      value = 6;
+    } else if (command === "boiler_preset") {
+      if (!this.boilerChoice.reportValidity()) return;
+      value = this.boilerChoice.value;
+    } else if (command === "solar_mode" || command === "night_mode") {
+      const id = command === "solar_mode" ? entities.solar_enabled : entities.night_enabled;
+      value = states[id]?.state === "off";
+    }
+    this.commandPending = true;
+    this.queueUpdate();
+    this.report(message, "Odesílám povel…");
+    try {
+      const data = value === undefined ? { command } : { command, value };
+      await this.callSettings("sandi_energy/device/command", data);
+      this.report(message, "Povel byl odeslán.");
+    } catch (err) {
+      this.report(message, err.message || "Povel se nepodařilo odeslat.", true);
+    } finally {
+      this.commandPending = false;
+      this.queueUpdate();
+    }
+  }
+
+  updateDeviceControls(states, entities, ev, boiler) {
+    const charger = states[entities.current];
+    const thermostat = states[entities.boiler];
+    if (charger?.attributes) {
+      const { min, max, step } = charger.attributes;
+      this.ampInput.min = Math.max(6, min ?? 6);
+      this.ampInput.max = max ?? "";
+      this.ampInput.step = step ?? 1;
+      if (this.shadowRoot.activeElement !== this.ampInput && this.ampInput.dataset.observed !== charger.state) {
+        this.ampInput.dataset.observed = charger.state;
+        this.ampInput.value = unavailable.includes(charger.state) ? "" : charger.state;
+      }
+    }
+    const choices = (thermostat?.attributes.preset_modes ?? []).filter((value) => Object.hasOwn(presets, value));
+    const signature = choices.join(",");
+    if (this.presetSignature !== signature) {
+      this.presetSignature = signature;
+      this.boilerChoice.replaceChildren(...choices.map((choice) => {
+        const option = document.createElement("option");
+        option.value = choice;
+        option.textContent = presets[choice];
+        return option;
+      }));
+      if (choices.includes(thermostat?.attributes.preset_mode)) {
+        this.boilerChoice.value = thermostat.attributes.preset_mode;
+      }
+    }
+    const solar = states[entities.solar_enabled]?.state;
+    const night = states[entities.night_enabled]?.state;
+    for (const button of this.deviceButtons) {
+      const command = button.dataset.command;
+      const helper = command === "solar_mode" ? solar : command === "night_mode" ? night : null;
+      if (command.endsWith("_mode")) {
+        button.setAttribute("aria-pressed", String(helper === "on"));
+        button.disabled = this.commandPending || (helper !== "on" && helper !== "off");
+      } else if (command.startsWith("ev_")) {
+        button.disabled = this.commandPending || ev.control_enabled === true;
+      } else {
+        button.disabled = this.commandPending || boiler.control_enabled === true
+          || (command === "boiler_preset" && !choices.length);
+      }
+    }
+    this.ampInput.disabled = ev.control_enabled === true;
+    this.boilerChoice.disabled = boiler.control_enabled === true || !choices.length;
   }
 
   outletLabel(entity) {
@@ -380,7 +662,7 @@ class SandiEnergyPanel extends HTMLElement {
     const outlets = states[diagnostics.outlets]?.attributes ?? {};
     const active = [ev, boiler, outlets].some((item) => item.control_enabled === true);
     const currentAndTarget = [ev.current_setpoint_a, ev.target_current_a].map((value) => quantity(value));
-    const powerLimit = this.panelConfig?.eps_limit_w;
+    const powerLimit = ev.eps_limit_w ?? this.panelConfig?.eps_limit_w;
     const eps = ev.eps_w ?? boiler.eps_active_w;
 
     const values = {
@@ -395,16 +677,19 @@ class SandiEnergyPanel extends HTMLElement {
       tariff: stateLabel(tariff, { on: "Aktivní", off: "Vypnutý" }),
       ev_power: quantity(ev.ev_w, "W"),
       amps: currentAndTarget.join(" / ") + (currentAndTarget.every((item) => item === "—") ? "" : " A"),
-      ev_priority: outlets.ev_priority ?? "—",
+      ev_priority: priorityLabel(outlets.ev_priority),
       ev_reason: ev.reason ?? "",
       ev_error: ev.last_error ?? "",
+      ev_manual: ev.control_enabled ? "Nabíječku řídí automatika." : "Ruční start používá aktuální zdroj a nastavený proud bez ohledu na časový plán.",
       boiler_mode: stateLabel(boilerEntity?.state, boilerModes),
       temperature: quantity(boilerEntity?.attributes.current_temperature, "°C"),
+      boiler_preset: stateLabel(boilerEntity?.attributes.preset_mode, presets),
       target_preset: stateLabel(boiler.target_preset, presets),
-      boiler_priority: outlets.boiler_priority ?? "—",
+      boiler_priority: priorityLabel(outlets.boiler_priority),
       boiler_reason: boiler.reason ?? "",
       boiler_error: boiler.last_error ?? "",
-      outlet_priority: outlets.priority ?? "—",
+      boiler_manual: boiler.control_enabled ? "Bojler řídí automatika podle ETA baterie a EPS." : "",
+      outlet_priority: priorityLabel(outlets.priority),
       outlet_reason: outlets.reason ?? "",
     };
     for (const [key, value] of Object.entries(values)) {
@@ -420,6 +705,7 @@ class SandiEnergyPanel extends HTMLElement {
     }
     this.updateOutlets(outlets.outlets ?? [], states);
     this.updateInputs(entities, states);
+    this.updateDeviceControls(states, entities, ev, boiler);
   }
 
   updateInputs(entities, states) {
@@ -455,7 +741,7 @@ class SandiEnergyPanel extends HTMLElement {
     const labels = outlets.map((outlet) => [
       outlet.entity,
       states[outlet.entity]?.attributes.friendly_name ?? outlet.entity,
-      outlet.priority,
+      priorityLabel(outlet.priority),
       quantity(outlet.watts, "W"),
       outlet.on == null ? "Nedostupná" : outlet.on ? "Zapnutá" : "Vypnutá",
       outlet.error || (!outlet.enabled ? "Ručně" : outlet.target_on ? "Zapnout" : "Vypnout"),

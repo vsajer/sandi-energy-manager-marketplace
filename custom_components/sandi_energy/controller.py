@@ -12,6 +12,7 @@ from homeassistant.util import dt as dt_util
 
 from .allocation import allocate
 from .const import CONTROL_DEFAULTS
+from .manual import manual_service
 from .outlets import START_STABLE_SECONDS, Outlet
 from .policy import (
     EVInput, IDLE_STATUSES, MIN_A, SOLAR_INCREASE_SECONDS,
@@ -48,6 +49,7 @@ class EnergyController:
         self._outlet_ready_since = 0
         self._outlet_last_command = float("-inf")
         self._last_power_command = float("-inf")
+        self.action_lock = asyncio.Lock()
 
     @callback
     def start(self, _hass):
@@ -77,6 +79,19 @@ class EnergyController:
             self._watch_states()
         self._request()
 
+    @callback
+    def apply_controls(self, settings):
+        previous = self.config
+        self.config = {**previous, **settings}
+        self._solar_ready_since = None
+        self._increase_since = None
+        self._outlet_ready = None
+        if previous["control_boiler"] != settings["control_boiler"]:
+            self._restore_mode = None
+            self._boiler_pending = None
+            self._boiler_recovery_since = None
+        self._request()
+
     async def stop(self):
         self._running = False
         if self._unsubscribe_states is not None:
@@ -88,6 +103,8 @@ class EnergyController:
         if self._task is not None:
             # Drain the in-flight service before Home Assistant reloads the entry.
             await asyncio.gather(self._task, return_exceptions=True)
+        async with self.action_lock:
+            pass
 
     @callback
     def _request(self, _event_or_time=None):
@@ -105,7 +122,9 @@ class EnergyController:
     async def _drain(self):
         while self._running and self._pending:
             self._pending = False
-            await self._evaluate()
+            async with self.action_lock:
+                if self._running:
+                    await self._evaluate()
 
     def _state(self, key):
         return self.hass.states.get(self.entities[key])
@@ -151,7 +170,7 @@ class EnergyController:
             for listener in tuple(self.listeners):
                 listener()
 
-    async def _call(self, key, service, *, cooldown=8, entity=None, **data):
+    async def _call(self, key, service, *, cooldown=8, entity=None, context=None, **data):
         if not self._running:
             return False
         attempt = (key, service, tuple(data.items()))
@@ -165,13 +184,22 @@ class EnergyController:
             async with asyncio.timeout(8):
                 await self.hass.services.async_call(
                     entity_id.partition(".")[0], service,
-                    {"entity_id": entity_id, **data}, blocking=True,
+                    {"entity_id": entity_id, **data}, blocking=True, context=context,
                 )
         except (HomeAssistantError, TimeoutError) as err:
             self._errors[key] = f"{service}: {err or type(err).__name__}"
             return False
         self._errors.pop(key, None)
         return True
+
+    async def run_manual(self, command, value, context):
+        """Validate and dispatch one user action using the same service path."""
+        async with self.action_lock:
+            if not self._running:
+                raise ValueError("Regulátor se ještě nenačetl.")
+            key, service, data = manual_service(self, command, value)
+            if not await self._call(key, service, context=context, **data):
+                raise ValueError(self._errors.get(key, "Povel už byl odeslán. Zkontroluj stav zařízení."))
 
     async def _evaluate(self):
         outlet_generation = self._outlet_generation
@@ -200,6 +228,7 @@ class EnergyController:
                               or self._restore_mode is not None or self._boiler_pending is not None))
         plan, boiler_allowed, outlet_plan = allocate(
             data, self.config, outlets, boiler_demand, heating and boiler_demand,
+            self._value("boiler") not in {None, "off"},
         )
         action, reason = self._ev_action(data, plan)
         if action and plan.mode == "solar" and self._adds_ev_load(action):
@@ -226,6 +255,7 @@ class EnergyController:
             "current_setpoint_a": self._numeric("current"),
             "pv_w": data.pv_w,
             "eps_w": data.eps_w,
+            "eps_limit_w": self.config["inverter_limit_w"],
             "ev_w": data.ev_w,
             "battery_soc": data.soc,
             "available_w": round(plan.available_w) if plan.available_w is not None else None,
@@ -249,7 +279,7 @@ class EnergyController:
             on = {"on": True, "off": False}.get(state.state) if state else None
             age = (now - state.last_changed).total_seconds() if state else 0
             outlets.append(Outlet(**item, on=on, age=age))
-        return sorted(outlets, key=lambda item: (item.priority, item.entity))
+        return sorted(outlets, key=lambda item: (-item.priority, item.entity))
 
     async def _evaluate_outlets(self, outlets, plan):
         now = monotonic()
@@ -376,7 +406,7 @@ class EnergyController:
         mode = self._value("boiler")
         overload_w = self._eps()
         pv = self._power("pv")
-        overload = overload_w is not None and overload_w > 4000
+        overload = overload_w is not None and overload_w > min(4000, self.config["inverter_limit_w"])
         blocked = overload or demand and not allowed
         actual_headroom = (min(pv - overload_w - self.config["pv_reserve_w"],
                                self.config["inverter_limit_w"] - overload_w)

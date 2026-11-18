@@ -56,7 +56,7 @@
     "step": {
       "operating": {
         "title": "Operating settings",
-        "description": "Leave all controls off for preview. Priority 1 is the highest.",
+        "description": "Leave all controls off for preview. Priority +5 is the highest.",
         "data": {
           "control_ev": "Control charging session and current",
           "control_source": "Automatically select the Sonoff source",
@@ -93,7 +93,7 @@
         "data": {
           "entity": "Outlet",
           "enabled": "Include in automatic control",
-          "priority": "Outlet priority (1 is highest)",
+          "priority": "Outlet priority (-5 to +5)",
           "watts": "Appliance power (W)",
           "min_on_s": "Minimum on time (s)",
           "min_off_s": "Minimum off time (s)"

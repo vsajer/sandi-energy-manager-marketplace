@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigFlow, OptionsFlowWithReload
 from homeassistant.core import callback
 from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig
 
-from .const import CONTROL_DEFAULTS, DOMAIN, ENTITY_DOMAINS, OUTLET_DEFAULTS, OUTLET_RANGES
+from .const import CONTROL_DEFAULTS, CONTROL_RANGES, DOMAIN, ENTITY_DOMAINS, OUTLET_DEFAULTS, OUTLET_RANGES
 
 
 def entity_schema(values: dict):
@@ -23,15 +23,8 @@ def entity_schema(values: dict):
 
 LIMITS = {
     "phases": vol.All(vol.Coerce(int), vol.In((1, 3))),
-    "solar_max_a": vol.All(vol.Coerce(int), vol.Range(min=6, max=32)),
-    "night_a": vol.All(vol.Coerce(int), vol.Range(min=6, max=32)),
-    "pv_reserve_w": vol.All(vol.Coerce(int), vol.Range(min=0, max=20000)),
-    "inverter_limit_w": vol.All(vol.Coerce(int), vol.Range(min=1000, max=50000)),
-    "power_max_age_s": vol.All(vol.Coerce(int), vol.Range(min=15, max=600)),
-    "boiler_w": vol.All(vol.Coerce(int), vol.Range(min=1, max=10000)),
-    "ev_priority": vol.All(vol.Coerce(int), vol.Range(min=1, max=999)),
-    "boiler_priority": vol.All(vol.Coerce(int), vol.Range(min=1, max=999)),
-    "outlet_priority": vol.All(vol.Coerce(int), vol.Range(min=1, max=999)),
+    **{key: vol.All(vol.Coerce(int), vol.Range(min=low, max=high))
+       for key, (low, high) in CONTROL_RANGES.items()},
 }
 
 
@@ -39,6 +32,7 @@ class SandiConfigFlow(ConfigFlow, domain=DOMAIN):
     """Install one controller for the household."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     async def async_step_user(self, user_input=None):
         await self.async_set_unique_id(DOMAIN)

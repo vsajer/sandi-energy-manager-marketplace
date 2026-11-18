@@ -30,7 +30,7 @@ def plan_outlets(outlets: list[Outlet], pv_w: float | None, eps_w: float | None,
                  reserve_w: int, limit_w: int, allocation_w: float | None = None) -> OutletPlan:
     ranked = sorted(
         (item for item in outlets if item.enabled and item.on is not None),
-        key=lambda item: (item.priority, item.entity),
+        key=lambda item: (-item.priority, item.entity),
     )
     running = [item for item in ranked if item.on]
     current_targets = frozenset(item.entity for item in running)
@@ -49,7 +49,7 @@ def plan_outlets(outlets: list[Outlet], pv_w: float | None, eps_w: float | None,
               if allocation_w is None else allocation_w)
     targets = set()
     for item in ranked:
-        if item.on and item.age < item.min_on_s and not overload:
+        if item.on and (item.priority >= 0 or item.age < item.min_on_s) and not overload:
             targets.add(item.entity)
             budget -= item.watts
     for item in ranked:

@@ -56,7 +56,7 @@
     "step": {
       "operating": {
         "title": "Provozní nastavení",
-        "description": "V náhledu nech všechny volby řízení vypnuté. Číslo 1 je nejvyšší priorita.",
+        "description": "V náhledu nech všechny volby řízení vypnuté. Priorita +5 je nejvyšší.",
         "data": {
           "control_ev": "Řídit nabíjecí relaci a proud",
           "control_source": "Automaticky přepínat Sonoff",
@@ -93,7 +93,7 @@
         "data": {
           "entity": "Zásuvka",
           "enabled": "Zařadit do automatického řízení",
-          "priority": "Priorita zásuvky (1 je nejvyšší)",
+          "priority": "Priorita zásuvky (−5 až +5)",
           "watts": "Příkon spotřebiče (W)",
           "min_on_s": "Minimální doba zapnutí (s)",
           "min_off_s": "Minimální doba vypnutí (s)"
