@@ -14,5 +14,6 @@ Vlastní integrace pro Home Assistant pro řízení nabíjení elektromobilu, bo
 - Po instalaci integrace nabízí náhled. Přepínání zdroje, změny proudu, řízení bojleru a spínání zásuvek se zapínají samostatně v nastavení. Před aktivací vypni původní automatizace ovládající stejné entity.
 - Prioritu lze nastavit pro solární nabíjení, bojler i skupinu zásuvek. Každá zásuvka má vlastní pořadí a minimální dobu zapnutí a vypnutí. Nabíjení ze sítě v nízkém tarifu běží mimo FV pořadí.
 - Výběr nejdřív nabízí entity označené jako zásuvky, potom další spínače. Přidávej jen zařízení, která jsou napájená z EPS. Novou zásuvku můžeš nejdřív uložit ručně a do automatického řízení ji zařadit později. Společný přepínač řízení zásuvek je v provozním nastavení integrace.
+- Sekce **Základní entity** ukazuje všech 15 vstupů regulátoru včetně aktuální hodnoty a ID zdrojové entity. Přiřazení se mění přes nabídku **Přenastavit** u integrace.
 - Pokud používáš přepínání FVE a sítě, ověř význam poloh přepínače a hardwarové blokování obou zdrojů. Automatické přepnutí čeká na ukončení nabíjecí relace, nízký odběr a ustálení nové polohy.
 - Skutečné reakce zařízení a mapování entit ověř v náhledu před zapnutím řízení.

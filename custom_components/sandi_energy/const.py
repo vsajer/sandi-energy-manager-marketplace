@@ -1,7 +1,7 @@
 """Supported entity domains and defaults."""
 
 DOMAIN = "sandi_energy"
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 OUTLET_DEFAULTS = {"enabled": False, "priority": 10, "watts": 500, "min_on_s": 120, "min_off_s": 60}
 OUTLET_RANGES = {"priority": (1, 999), "watts": (1, 20000), "min_on_s": (0, 86400), "min_off_s": (0, 86400)}

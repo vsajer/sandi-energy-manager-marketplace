@@ -81,6 +81,7 @@ const layout = `
     .message { color: var(--secondary-text-color); }
     .message:empty { display: none; }
     .message[data-error] { color: var(--error-color, #b62222); }
+    .entity-id { display: block; color: var(--secondary-text-color, #516259); font-size: 12px; overflow-wrap: anywhere; }
     [hidden] { display: none !important; }
     @media (max-width: 720px) {
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -159,6 +160,12 @@ const layout = `
         </form>
         <p class="message" role="status"></p>
       </section>
+      <section class="card full">
+        <div class="panel-heading"><ha-icon icon="mdi:lan-connect"></ha-icon><h2>Základní entity</h2></div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Role v regulátoru</th><th>Entita Home Assistantu</th><th>Aktuální stav</th></tr></thead><tbody class="entity-rows"></tbody></table>
+        </div>
+      </section>
     </div>
   </main>`;
 
@@ -167,6 +174,23 @@ const boilerModes = { off: "Vypnutý", heat: "Topení", auto: "Automaticky" };
 const presets = { activity: "Aktivní", eco: "Úsporný", sleep: "Útlum" };
 const unavailable = ["unknown", "unavailable"];
 const outletNumbers = ["priority", "watts", "min_on_s", "min_off_s"];
+const inputRoles = {
+  pv: "Výroba FVE",
+  eps: "Odběr EPS",
+  overload: "Činný výkon EPS",
+  soc: "Nabití domácí baterie",
+  eta: "Odhad do nabití",
+  ev_power: "Příkon nabíječky",
+  ev_status: "Stav nabíječky",
+  connected: "Auto připojeno",
+  tariff: "Nízký tarif HDO",
+  solar_enabled: "Nabíjení z FVE",
+  night_enabled: "Nabíjení v nízkém tarifu",
+  source: "Sonoff přepínač zdroje",
+  session: "Spínač nabíjecí relace",
+  current: "Nastavený proud nabíječky",
+  boiler: "Termostat bojleru",
+};
 
 function quantity(value, unit) {
   if (value == null || value === "" || !Number.isFinite(Number(value))) return "—";
@@ -189,6 +213,7 @@ class SandiEnergyPanel extends HTMLElement {
     this.meter = root.querySelector("progress");
     this.table = root.querySelector(".table-wrap");
     this.rows = root.querySelector("tbody");
+    this.entityRows = root.querySelector(".entity-rows");
     this.form = root.querySelector(".outlet-form");
     this.formTitle = root.querySelector(".form-title");
     this.addOutlet = root.querySelector(".add-outlet");
@@ -394,6 +419,36 @@ class SandiEnergyPanel extends HTMLElement {
       this.meter.value = Math.min(powerLimit, eps);
     }
     this.updateOutlets(outlets.outlets ?? [], states);
+    this.updateInputs(entities, states);
+  }
+
+  updateInputs(entities, states) {
+    const values = Object.entries(inputRoles).map(([key, role]) => {
+      const id = entities[key];
+      const state = states[id];
+      const value = state?.state;
+      const unit = state?.attributes.unit_of_measurement;
+      return [role, id, state?.attributes.friendly_name, unit && Number.isFinite(Number(value))
+        ? quantity(value, unit)
+        : stateLabel(value, { ...boilerModes, on: "Zapnuto", off: "Vypnuto" })];
+    });
+    const signature = JSON.stringify(values);
+    if (signature === this.inputSignature) return;
+    this.inputSignature = signature;
+    this.entityRows.replaceChildren(...values.map(([role, id, name, value]) => {
+      const row = document.createElement("tr");
+      row.insertCell().textContent = role;
+      const entity = row.insertCell();
+      entity.textContent = name || id || "Nepřiřazena";
+      if (name && id) {
+        const label = document.createElement("span");
+        label.className = "entity-id";
+        label.textContent = id;
+        entity.append(label);
+      }
+      row.insertCell().textContent = value;
+      return row;
+    }));
   }
 
   updateOutlets(outlets, states) {
