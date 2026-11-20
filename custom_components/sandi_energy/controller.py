@@ -11,7 +11,7 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.util import dt as dt_util
 
 from .allocation import allocate
-from .const import CONTROL_DEFAULTS
+from .const import CONTROL_DEFAULTS, ENTITY_DOMAINS
 from .manual import manual_service
 from .outlets import POWER_UNITS, START_STABLE_SECONDS, Outlet
 from .policy import (
@@ -21,10 +21,11 @@ from .policy import (
 
 
 class EnergyController:
-    def __init__(self, hass, entry):
+    def __init__(self, hass, entry, audit):
         self.hass = hass
         self.entry = entry
-        self.entities = dict(entry.data)
+        self.audit = audit
+        self.entities = {role: entry.data.get(role) for role in ENTITY_DOMAINS}
         self.config = {**CONTROL_DEFAULTS, **entry.options}
         self.outlet_settings = self._allowed_outlets(entry.options.get("outlets", []))
         self.listeners = []
@@ -66,7 +67,8 @@ class EnergyController:
     def _watch_states(self):
         if self._unsubscribe_states is not None:
             self._unsubscribe_states()
-        watched = set(self.entities.values()) | {item["entity"] for item in self.outlet_settings}
+        watched = {entity for entity in self.entities.values() if entity}
+        watched.update(item["entity"] for item in self.outlet_settings)
         watched.update(item["power_sensor"] for item in self.outlet_settings if item.get("power_sensor"))
         self._unsubscribe_states = async_track_state_change_event(self.hass, watched, self._request)
 
@@ -79,6 +81,26 @@ class EnergyController:
         if self._running:
             self._watch_states()
         self._request()
+
+    @callback
+    def apply_entities(self, data, role):
+        """Rebind state listeners while holding the actuator lock."""
+        self.entities = {key: data.get(key) for key in ENTITY_DOMAINS}
+        self._outlet_ready = None
+        if role != "boiler":
+            self._idle_since = None
+            self._solar_ready_since = None
+            self._increase_since = None
+        if role in ("source", "session", "ev_power", "ev_status"):
+            self._source_pending_until = max(self._source_pending_until, monotonic() + SOURCE_SETTLE_SECONDS)
+        if role == "boiler":
+            self._restore_mode = None
+            self._restore_cause = None
+            self._boiler_pending = None
+            self._boiler_recovery_since = None
+        self._attempts = {attempt: now for attempt, now in self._attempts.items() if attempt[0] != role}
+        self._errors.pop(role, None)
+        self.apply_outlets(self.entry.options.get("outlets", []))
 
     @callback
     def apply_controls(self, settings):
@@ -128,7 +150,8 @@ class EnergyController:
                     await self._evaluate()
 
     def _state(self, key):
-        return self.hass.states.get(self.entities[key])
+        entity = self.entities.get(key)
+        return self.hass.states.get(entity) if entity else None
 
     def _value(self, key):
         state = self._state(key)
@@ -181,13 +204,15 @@ class EnergyController:
     async def _call(self, key, service, *, cooldown=8, entity=None, context=None, **data):
         if not self._running:
             return False
+        entity_id = entity or self.entities[key]
+        if not entity_id:
+            return False
         attempt = (key, service, tuple(data.items()))
         now = monotonic()
         if now - self._attempts.get(attempt, float("-inf")) < cooldown:
             return False
         self._attempts[attempt] = now
         self._last_power_command = now
-        entity_id = entity or self.entities[key]
         try:
             async with asyncio.timeout(8):
                 await self.hass.services.async_call(
@@ -196,15 +221,20 @@ class EnergyController:
                 )
         except (HomeAssistantError, TimeoutError) as err:
             self._errors[key] = f"{service}: {err or type(err).__name__}"
+            self.audit.record("manual" if context else "automatic", service, entity_id,
+                              details=data, error=str(err) or type(err).__name__)
             return False
         self._errors.pop(key, None)
+        self.audit.record("manual" if context else "automatic", service, entity_id, details=data)
         return True
 
-    async def run_manual(self, command, value, context):
+    async def run_manual(self, command, value, context, *, mapping=None):
         """Validate and dispatch one user action using the same service path."""
         async with self.action_lock:
             if not self._running:
                 raise ValueError("Regulátor se ještě nenačetl.")
+            if mapping is not None and mapping != self.entities:
+                raise ValueError("Přiřazení entit se změnilo. Zkontroluj aktuální zařízení a povel zopakuj.")
             key, service, data = manual_service(self, command, value)
             if not await self._call(key, service, context=context, **data):
                 raise ValueError(self._errors.get(key, "Povel už byl odeslán. Zkontroluj stav zařízení."))

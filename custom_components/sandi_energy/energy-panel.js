@@ -70,7 +70,7 @@ const layout = `
     .action.remove { color: var(--error-color, #b62222); }
     .action:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--energy-accent); outline-offset: 2px; }
     .action:disabled { opacity: .6; cursor: wait; }
-    .outlet-form { margin-top: 16px; border-top: 1px solid var(--energy-line); padding-top: 14px; }
+    .outlet-form, .entity-form { margin-top: 16px; border-top: 1px solid var(--energy-line); padding-top: 14px; }
     .form-grid { display: grid; grid-template-columns: repeat(4, minmax(90px, 1fr)); gap: 10px; margin-top: 12px; }
     .picker { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 10px; margin-top: 12px; }
     label { display: grid; gap: 5px; min-width: 0; font-size: 13px; }
@@ -84,6 +84,8 @@ const layout = `
     .message:empty { display: none; }
     .message[data-error] { color: var(--error-color, #b62222); }
     .entity-id { display: block; color: var(--secondary-text-color, #516259); font-size: 12px; overflow-wrap: anywhere; }
+    .log-details { overflow-wrap: anywhere; }
+    .log-time { white-space: nowrap; }
     .device-controls { border-top: 1px solid var(--energy-line); margin-top: 14px; padding-top: 12px; }
     .device-controls h3, .tuning h3 { margin: 0 0 8px; font-size: 15px; }
     .buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 8px; }
@@ -114,6 +116,7 @@ const layout = `
     <nav class="page-nav" aria-label="Energie domu">
       <a class="settings overview-link" href="/sandi-energy" aria-current="page">Přehled</a>
       <a class="settings settings-link" href="/sandi-energy/nastaveni">Nastavení</a>
+      <a class="settings log-link" href="/sandi-energy/protokol">Protokol</a>
     </nav>
   </header>
   <main class="overview-page">
@@ -213,7 +216,10 @@ const layout = `
             <label>Min. zapnutí (s) <input type="number" name="min_on_s" min="0" max="86400" required></label>
             <label>Min. vypnutí (s) <input type="number" name="min_off_s" min="0" max="86400" required></label>
           </div>
-          <label class="meter-picker">Senzor aktuálního příkonu (volitelný) <select name="power_sensor"></select></label>
+          <div class="picker meter-picker">
+            <label>Vyhledat senzor příkonu <input type="search" name="meter_search" placeholder="Název nebo ID senzoru"></label>
+            <label>Senzor aktuálního příkonu (volitelný) <select name="power_sensor"></select></label>
+          </div>
           <p class="hint">Orientační příkon slouží pro start a zastoupí chybějící měření. Čerstvá hodnota ze senzoru se používá pro zapnutý spotřebič.</p>
           <label class="enabled"><input type="checkbox" name="enabled"> Zařadit do automatického řízení FVE</label>
           <div class="form-footer">
@@ -237,12 +243,42 @@ const layout = `
       </section>
       <section class="card full">
         <div class="panel-heading"><ha-icon icon="mdi:lan-connect"></ha-icon><h2>Základní entity</h2></div>
-        <p class="hint"><a href="/config/integrations/integration/sandi_energy">Přiřazení entit v nastavení integrace</a></p>
         <div class="table-wrap">
-          <table><thead><tr><th>Role v regulátoru</th><th>Entita Home Assistantu</th><th>Aktuální stav</th></tr></thead><tbody class="entity-rows"></tbody></table>
+          <table><thead><tr><th>Role v regulátoru</th><th>Entita Home Assistantu</th><th>Aktuální stav</th><th>Úpravy</th></tr></thead><tbody class="entity-rows"></tbody></table>
         </div>
+        <div class="outlet-heading form-footer">
+          <h3>Sledované entity</h3>
+          <button type="button" class="action primary add-entity" disabled>Přidat sledovanou entitu</button>
+        </div>
+        <p class="hint">Hodnoty těchto entit slouží jen ke sledování.</p>
+        <div class="table-wrap watched-table" hidden>
+          <table><thead><tr><th>Entita Home Assistantu</th><th>Aktuální stav</th><th>Úpravy</th></tr></thead><tbody class="watched-rows"></tbody></table>
+        </div>
+        <form class="entity-form" hidden>
+          <h3 class="entity-form-title"></h3>
+          <div class="picker">
+            <label>Vyhledat entitu <input type="search" name="search" placeholder="Název nebo ID entity"></label>
+            <label>Entita Home Assistantu <select name="entity" required></select></label>
+          </div>
+          <div class="form-footer">
+            <button class="action primary" type="submit">Uložit entitu</button>
+            <button class="action cancel-entity" type="button">Zrušit</button>
+            <button class="action remove remove-entity" type="button" hidden>Odebrat ze sledování</button>
+          </div>
+        </form>
+        <p class="message entity-message" role="status"></p>
       </section>
     </div>
+  </main>
+  <main class="log-page" hidden>
+    <section class="card">
+      <div class="panel-heading"><ha-icon icon="mdi:clipboard-text-clock-outline"></ha-icon><h2>Protokol činnosti</h2></div>
+      <p class="hint">Posledních 300 záznamů od aktualizace. U povelů je uveden výsledek volání služby Home Assistantu.</p>
+      <p class="message log-message" role="status"></p>
+      <div class="table-wrap log-table" hidden>
+        <table><thead><tr><th>Čas</th><th>Zdroj</th><th>Akce</th><th>Entita</th><th>Výsledek a údaje</th></tr></thead><tbody class="log-rows"></tbody></table>
+      </div>
+    </section>
   </main>`;
 
 const evModes = { manual: "Ruční", waiting: "Čeká", solar: "FVE", night: "Nízký tarif" };
@@ -289,6 +325,37 @@ const inputRoles = {
   current: "Nastavený proud nabíječky",
   boiler: "Termostat bojleru",
 };
+const auditActions = {
+  turn_on: "Zapnout", turn_off: "Vypnout", set_value: "Nastavit hodnotu",
+  set_hvac_mode: "Nastavit režim termostatu", set_preset_mode: "Nastavit preset bojleru",
+  entity_assign: "Změna základní entity", watch_add: "Přidání sledované entity",
+  watch_change: "Změna sledované entity", watch_remove: "Odebrání sledované entity",
+  controls_save: "Změna nastavení regulátoru", outlet_add: "Přidání zásuvky",
+  outlet_edit: "Úprava zásuvky", outlet_remove: "Odebrání zásuvky",
+};
+const auditOrigins = { automatic: "Automatika", manual: "Ruční povel", settings: "Nastavení" };
+const auditKeys = {
+  ...Object.assign({}, ...settingGroups.map(([, fields]) => fields)),
+  previous: "Původní entita", role: "Role", value: "Hodnota", preset_mode: "Preset",
+  hvac_mode: "Režim", enabled: "Automatické řízení", priority: "Priorita",
+  watts: "Orientační příkon (W)", min_on_s: "Min. zapnutí (s)", min_off_s: "Min. vypnutí (s)",
+  power_sensor: "Senzor příkonu",
+};
+const dateFormat = new Intl.DateTimeFormat("cs-CZ", { dateStyle: "short", timeStyle: "medium" });
+
+function entityMatches(id, name, query) {
+  const normalize = (value) => value.toLocaleLowerCase("cs").normalize("NFD").replace(/\p{M}/gu, "");
+  const searchable = normalize(id + " " + name);
+  const prefixes = [normalize(id), normalize(name), ...searchable.split(/[\s._-]+/)];
+  return normalize(query.trim()).split(/\s+/).every((part) => prefixes.some((prefix) => prefix.startsWith(part)));
+}
+
+function entityOption(id, name) {
+  const option = document.createElement("option");
+  option.value = id;
+  option.textContent = id && id !== name ? name + " · " + id : name;
+  return option;
+}
 
 function quantity(value, unit) {
   if (value == null || value === "" || !Number.isFinite(Number(value))) return "—";
@@ -315,15 +382,32 @@ class SandiEnergyPanel extends HTMLElement {
     );
     this.meter = root.querySelector("progress");
     this.outletTables = [root.querySelector(".overview-outlets"), root.querySelector(".settings-outlets")];
-    this.pages = [root.querySelector(".overview-page"), root.querySelector(".settings-page")];
+    this.pages = [root.querySelector(".overview-page"), root.querySelector(".settings-page"), root.querySelector(".log-page")];
     this.pageLinks = [...root.querySelectorAll(".page-nav a")];
     this.entityRows = root.querySelector(".entity-rows");
+    this.watchedRows = root.querySelector(".watched-rows");
+    this.watchedTable = root.querySelector(".watched-table");
+    this.entityForm = root.querySelector(".entity-form");
+    this.entityMessage = root.querySelector(".entity-message");
+    this.addEntity = root.querySelector(".add-entity");
+    this.removeEntity = root.querySelector(".remove-entity");
+    this.logRows = root.querySelector(".log-rows");
+    this.logTable = root.querySelector(".log-table");
+    this.logMessage = root.querySelector(".log-message");
+    this.addEntity.addEventListener("click", () => this.openEntity(null, null));
+    this.entityForm.elements.search.addEventListener("input", () => this.fillEntityPicker());
+    this.entityForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.saveEntity(false);
+    });
+    this.removeEntity.addEventListener("click", () => this.saveEntity(true));
+    root.querySelector(".cancel-entity").addEventListener("click", () => this.closeEntityForm());
     this.form = root.querySelector(".outlet-form");
     this.formTitle = root.querySelector(".form-title");
     this.addOutlet = root.querySelector(".add-outlet");
     this.removeOutlet = root.querySelector(".remove-outlet");
     this.message = root.querySelector(".outlet-message");
-    this.picker = root.querySelector(".picker");
+    this.picker = this.form.querySelector(".picker");
     this.controls = this.form.elements;
     this.outletPriority = root.querySelector(".outlet-priority");
     this.tuningForm = root.querySelector(".tuning-form");
@@ -346,6 +430,7 @@ class SandiEnergyPanel extends HTMLElement {
     });
     this.addOutlet.addEventListener("click", () => this.openOutlet());
     this.controls.search.addEventListener("input", () => this.fillPicker());
+    this.controls.meter_search.addEventListener("input", () => this.fillMeterPicker(this.controls.power_sensor.value));
     this.form.addEventListener("submit", (event) => {
       event.preventDefault();
       this.saveOutlet(false);
@@ -364,6 +449,11 @@ class SandiEnergyPanel extends HTMLElement {
   connectedCallback() {
     this.showPage();
     this.queueUpdate();
+  }
+
+  disconnectedCallback() {
+    this.unsubscribe("entity");
+    this.unsubscribe("audit");
   }
 
   set narrow(value) {
@@ -390,7 +480,7 @@ class SandiEnergyPanel extends HTMLElement {
 
   showPage() {
     const path = this.currentRoute?.path || window.location.pathname.slice("/sandi-energy".length);
-    const page = path.split("/").filter(Boolean)[0] === "nastaveni" ? 1 : 0;
+    const page = { nastaveni: 1, protokol: 2 }[path.split("/").filter(Boolean)[0]] ?? 0;
     this.pages.forEach((element, index) => { element.hidden = page !== index; });
     this.pageLinks.forEach((element, index) => {
       if (page === index) element.setAttribute("aria-current", "page");
@@ -399,6 +489,43 @@ class SandiEnergyPanel extends HTMLElement {
     if (page === 1 && this.currentHass && this.panelConfig && !this.controlSnapshot && !this.loadingControls) {
       this.loadControls();
     }
+    if (!this.isConnected || !this.currentHass || !this.panelConfig) return;
+    this.subscribe("entity", "entities", (settings) => {
+      this.entitySettings = settings;
+      this.addEntity.disabled = false;
+      this.queueUpdate();
+    });
+    if (page === 2) {
+      this.subscribe("audit", "audit", (payload) => this.updateAudit(payload));
+    } else {
+      this.unsubscribe("audit");
+    }
+  }
+
+  get entities() {
+    return this.entitySettings?.mapping ?? this.panelConfig?.entities ?? {};
+  }
+
+  subscribe(key, command, receive) {
+    const property = key + "Subscription";
+    if (this[property]) return;
+    const subscription = this.currentHass.connection.subscribeMessage(
+      (payload) => { if (this[property] === subscription) receive(payload); },
+      { type: "sandi_energy/" + command + "/subscribe", entry_id: this.panelConfig.entry_id },
+    );
+    this[property] = subscription;
+    subscription.catch((err) => {
+      if (this[property] !== subscription) return;
+      this[property] = null;
+      this.report(key === "audit" ? this.logMessage : this.entityMessage,
+        err.message || "Data se nepodařilo načíst.", true);
+    });
+  }
+
+  unsubscribe(key) {
+    const property = key + "Subscription";
+    this[property]?.then((release) => release()).catch(() => {});
+    this[property] = null;
   }
 
   setMessage(text, error = false) {
@@ -424,6 +551,7 @@ class SandiEnergyPanel extends HTMLElement {
       this.selectedOutlet = this.settings.outlets.find((item) => item.entity === entity) ?? null;
       if (entity && !this.selectedOutlet) throw new Error("Zásuvka už není v seznamu.");
       const fields = this.selectedOutlet ?? this.settings.defaults;
+      this.controls.meter_search.value = "";
       this.fillMeterPicker(fields.power_sensor);
       for (const key of outletNumbers) this.controls[key].value = fields[key];
       this.outletPriority.value = priorityLabel(fields.priority);
@@ -536,7 +664,7 @@ class SandiEnergyPanel extends HTMLElement {
   async sendDeviceCommand(command) {
     if (this.commandPending) return;
     const message = command.startsWith("boiler_") ? this.boilerMessage : this.evMessage;
-    const entities = this.panelConfig.entities;
+    const entities = this.entities;
     const states = this.currentHass.states;
     let value;
     if (command === "ev_current") {
@@ -556,7 +684,7 @@ class SandiEnergyPanel extends HTMLElement {
     this.queueUpdate();
     this.report(message, "Odesílám povel…");
     try {
-      const data = value === undefined ? { command } : { command, value };
+      const data = value === undefined ? { command, mapping: entities } : { command, value, mapping: entities };
       await this.callSettings("sandi_energy/device/command", data);
       this.report(message, "Povel byl odeslán.");
     } catch (err) {
@@ -619,28 +747,25 @@ class SandiEnergyPanel extends HTMLElement {
 
   fillMeterPicker(previous) {
     const select = this.controls.power_sensor;
-    const entities = this.panelConfig.entities;
+    const entities = this.entities;
     const excluded = new Set([entities.pv, entities.eps, entities.overload, entities.ev_power,
       ...this.settings.outlets.filter((item) => item.entity !== this.selectedOutlet?.entity).map((item) => item.power_sensor)]);
+    const search = this.controls.meter_search.value;
     const list = Object.entries(this.currentHass.states)
       .filter(([id, state]) => id.startsWith("sensor.") && !excluded.has(id)
-        && ["W", "kW"].includes(state.attributes.unit_of_measurement))
+        && ["W", "kW"].includes(state.attributes.unit_of_measurement)
+        && entityMatches(id, this.outletLabel(id), search))
       .map(([id]) => [id, this.outletLabel(id)])
       .sort((left, right) => left[1].localeCompare(right[1], "cs") || left[0].localeCompare(right[0]));
     if (previous && !list.some(([id]) => id === previous)) list.unshift([previous, this.outletLabel(previous)]);
-    select.replaceChildren(...[["", "Pouze orientační příkon"], ...list].map(([id, name]) => {
-      const option = document.createElement("option");
-      option.value = id;
-      option.textContent = id && name !== id ? name + " · " + id : name;
-      return option;
-    }));
+    select.replaceChildren(...[["", "Pouze orientační příkon"], ...list].map(([id, name]) => entityOption(id, name)));
     select.value = previous ?? "";
   }
 
   fillPicker() {
     const select = this.controls.entity;
     const previous = select.value;
-    const search = this.controls.search.value.trim().toLocaleLowerCase("cs");
+    const search = this.controls.search.value;
     const excluded = new Set([...this.settings.excluded, ...this.settings.outlets.map((item) => item.entity)]);
     const candidates = Object.entries(this.currentHass?.states ?? {})
       .filter(([id]) => id.startsWith("switch.") && !excluded.has(id))
@@ -649,7 +774,7 @@ class SandiEnergyPanel extends HTMLElement {
         label: this.outletLabel(id),
         outlet: state.attributes.device_class === "outlet",
       }))
-      .filter(({ id, label }) => (id + " " + label).toLocaleLowerCase("cs").includes(search))
+      .filter(({ id, label }) => entityMatches(id, label, search))
       .sort((left, right) => left.label.localeCompare(right.label, "cs") || left.id.localeCompare(right.id));
 
     const prompt = document.createElement("option");
@@ -660,10 +785,7 @@ class SandiEnergyPanel extends HTMLElement {
       const group = document.createElement("optgroup");
       group.label = label;
       for (const item of candidates.filter((candidate) => candidate.outlet === isOutlet)) {
-        const option = document.createElement("option");
-        option.value = item.id;
-        option.textContent = item.label + " · " + item.id;
-        group.append(option);
+        group.append(entityOption(item.id, item.label));
       }
       if (group.childElementCount) select.append(group);
     }
@@ -710,7 +832,7 @@ class SandiEnergyPanel extends HTMLElement {
 
   update() {
     const states = this.currentHass?.states ?? {};
-    const entities = this.panelConfig?.entities ?? {};
+    const entities = this.entities;
     const diagnostics = this.panelConfig?.diagnostics ?? {};
     const boilerEntity = states[entities.boiler];
     const tariff = states[entities.tariff]?.state;
@@ -766,21 +888,24 @@ class SandiEnergyPanel extends HTMLElement {
   }
 
   updateInputs(entities, states) {
-    const values = Object.entries(inputRoles).map(([key, role]) => {
-      const id = entities[key];
+    const watched = this.entitySettings?.watched ?? [];
+    const describe = (id) => {
       const state = states[id];
       const value = state?.state;
       const unit = state?.attributes.unit_of_measurement;
-      return [role, id, state?.attributes.friendly_name, unit && Number.isFinite(Number(value))
+      return [state?.attributes.friendly_name, unit && Number.isFinite(Number(value))
         ? quantity(value, unit)
         : stateLabel(value, { ...boilerModes, on: "Zapnuto", off: "Vypnuto" })];
-    });
-    const signature = JSON.stringify(values);
+    };
+    const values = Object.keys(inputRoles).map((key) => [key, entities[key] ?? null, ...describe(entities[key])]);
+    const additional = watched.map((id) => [null, id, ...describe(id)]);
+    const signature = JSON.stringify([Boolean(this.entitySettings), values, additional]);
     if (signature === this.inputSignature) return;
     this.inputSignature = signature;
-    this.entityRows.replaceChildren(...values.map(([role, id, name, value]) => {
+    const focused = this.shadowRoot.activeElement?.dataset.entityEdit;
+    const render = ([role, id, name, value]) => {
       const row = document.createElement("tr");
-      row.insertCell().textContent = role;
+      if (role) row.insertCell().textContent = inputRoles[role];
       const entity = row.insertCell();
       entity.textContent = name || id || "Nepřiřazena";
       if (name && id) {
@@ -790,12 +915,117 @@ class SandiEnergyPanel extends HTMLElement {
         entity.append(label);
       }
       row.insertCell().textContent = value;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "action";
+      button.textContent = id ? "Upravit" : "Přiřadit";
+      button.dataset.entityEdit = role ?? id;
+      button.setAttribute("aria-label", button.textContent + " · " + (inputRoles[role] ?? name ?? id));
+      button.disabled = !this.entitySettings;
+      button.addEventListener("click", () => this.openEntity(role, id));
+      row.insertCell().append(button);
+      return row;
+    };
+    this.entityRows.replaceChildren(...values.map(render));
+    this.watchedRows.replaceChildren(...additional.map(render));
+    this.watchedTable.hidden = !additional.length;
+    if (focused) this.shadowRoot.querySelector(`[data-entity-edit="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
+  }
+
+  openEntity(role, id) {
+    if (!this.entitySettings || this.entityBusy) return;
+    this.entityEdit = { role, expected: id };
+    const fields = this.entityForm.elements;
+    fields.search.value = "";
+    this.entityForm.querySelector(".entity-form-title").textContent = role ? inputRoles[role]
+      : id ? "Upravit sledovanou entitu" : "Přidat sledovanou entitu";
+    this.removeEntity.hidden = Boolean(role) || !id;
+    this.fillEntityPicker(id);
+    this.report(this.entityMessage, "");
+    this.entityForm.hidden = false;
+    fields.search.focus();
+  }
+
+  fillEntityPicker(previous = this.entityForm.elements.entity.value) {
+    const { role, expected } = this.entityEdit;
+    const fields = this.entityForm.elements;
+    const domain = this.entitySettings.domains[role];
+    const excluded = new Set(role ? [] : this.entitySettings.watched.filter((id) => id !== expected));
+    const candidates = Object.keys(this.currentHass.states)
+      .filter((id) => (!domain || id.startsWith(domain + ".")) && !excluded.has(id)
+        && entityMatches(id, this.outletLabel(id), fields.search.value))
+      .sort((a, b) => this.outletLabel(a).localeCompare(this.outletLabel(b), "cs") || a.localeCompare(b));
+    if (previous && !candidates.includes(previous)) candidates.unshift(previous);
+    fields.entity.replaceChildren(entityOption("", candidates.length ? "Vyber entitu" : "Žádné odpovídající entity"),
+      ...candidates.map((id) => entityOption(id, this.outletLabel(id))));
+    fields.entity.value = previous ?? "";
+  }
+
+  closeEntityForm() {
+    if (this.entityBusy) return;
+    this.entityForm.hidden = true;
+    const key = this.entityEdit?.role ?? this.entityEdit?.expected;
+    const button = key && this.shadowRoot.querySelector(`[data-entity-edit="${CSS.escape(key)}"]`);
+    (button || this.addEntity).focus();
+    this.entityEdit = null;
+  }
+
+  async saveEntity(remove) {
+    if (this.entityBusy || !this.entityEdit) return;
+    const entity = remove ? null : this.entityForm.elements.entity.value;
+    this.entityBusy = true;
+    const buttons = this.entityForm.querySelectorAll("button");
+    buttons.forEach((button) => { button.disabled = true; });
+    let saved = false;
+    try {
+      await this.callSettings("sandi_energy/entities/save", { ...this.entityEdit, entity });
+      saved = true;
+      this.report(this.entityMessage, remove ? "Entita byla odebrána ze sledování." : "Entita byla uložena.");
+    } catch (err) {
+      this.report(this.entityMessage, err.message || "Entitu se nepodařilo uložit.", true);
+    } finally {
+      this.entityBusy = false;
+      buttons.forEach((button) => { button.disabled = false; });
+      if (saved) this.closeEntityForm();
+    }
+  }
+
+  updateAudit({ history, record }) {
+    if (history) this.auditHistory = history;
+    if (record) this.auditHistory = [record, ...(this.auditHistory ?? [])].slice(0, 300);
+    const rows = this.auditHistory ?? [];
+    this.logTable.hidden = !rows.length;
+    this.report(this.logMessage, rows.length ? "" : "Zatím žádné záznamy.");
+    this.logRows.replaceChildren(...rows.map((item) => {
+      const row = document.createElement("tr");
+      row.insertCell().textContent = dateFormat.format(new Date(item.time));
+      row.cells[0].className = "log-time";
+      row.insertCell().textContent = auditOrigins[item.origin] ?? item.origin;
+      row.insertCell().textContent = auditActions[item.action] ?? item.action;
+      const entity = row.insertCell();
+      entity.textContent = item.entity ? (this.outletLabel(item.entity) || item.entity) : "—";
+      if (item.entity && entity.textContent !== item.entity) {
+        const id = document.createElement("span");
+        id.className = "entity-id";
+        id.textContent = item.entity;
+        entity.append(id);
+      }
+      const details = Object.entries(item.details ?? {}).filter(([, value]) => value != null).map(([key, value]) =>
+        (auditKeys[key] ?? key) + " – " + (key === "role" ? (inputRoles[value] ?? value)
+          : typeof value === "boolean" ? (value ? "Ano" : "Ne") : value));
+      const outcome = item.error ? "Chyba · " + item.error : item.origin === "settings" ? "Uloženo" : "Povel přijat";
+      const cell = row.insertCell();
+      cell.className = item.error ? "log-details error" : "log-details";
+      cell.textContent = [outcome, ...details].join(" · ");
       return row;
     }));
   }
 
   updateOutlets(outlets, states) {
-    const labels = outlets.map((outlet) => [
+    const ordered = [...outlets].sort((a, b) => b.priority - a.priority
+      || this.outletLabel(a.entity).localeCompare(this.outletLabel(b.entity), "cs")
+      || a.entity.localeCompare(b.entity));
+    const labels = ordered.map((outlet) => [
       outlet.entity,
       states[outlet.entity]?.attributes.friendly_name ?? outlet.entity,
       priorityLabel(outlet.priority),

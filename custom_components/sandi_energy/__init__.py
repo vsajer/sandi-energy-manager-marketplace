@@ -9,6 +9,7 @@ from homeassistant.const import Platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.start import async_at_started
 
+from .audit import AuditLog
 from .const import DOMAIN, VERSION
 from .controller import EnergyController
 from .panel_api import async_register_commands
@@ -39,7 +40,9 @@ async def async_setup(hass, config):
 
 
 async def async_setup_entry(hass, entry):
-    controller = entry.runtime_data = EnergyController(hass, entry)
+    audit = AuditLog(hass, entry.entry_id)
+    await audit.load()
+    controller = entry.runtime_data = EnergyController(hass, entry, audit)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     registry = er.async_get(hass)
     diagnostics = {
@@ -71,4 +74,5 @@ async def async_unload_entry(hass, entry):
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
     await entry.runtime_data.stop()
+    await entry.runtime_data.audit.flush()
     return True
