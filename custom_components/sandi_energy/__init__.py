@@ -22,8 +22,10 @@ PANEL_ASSET = "/sandi_energy_assets/energy-panel.js"
 async def async_migrate_entry(hass, entry):
     if entry.version != 1:
         return False
-    if entry.minor_version < 2:
-        hass.config_entries.async_update_entry(entry, options=migrate_priorities(entry.options), minor_version=2)
+    if entry.minor_version < 3:
+        options = migrate_priorities(entry.options) if entry.minor_version < 2 else dict(entry.options)
+        options.pop("outlet_priority", None)
+        hass.config_entries.async_update_entry(entry, options=options, minor_version=3)
     return True
 
 

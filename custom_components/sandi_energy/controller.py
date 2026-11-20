@@ -13,7 +13,7 @@ from homeassistant.util import dt as dt_util
 from .allocation import allocate
 from .const import CONTROL_DEFAULTS
 from .manual import manual_service
-from .outlets import START_STABLE_SECONDS, Outlet
+from .outlets import POWER_UNITS, START_STABLE_SECONDS, Outlet
 from .policy import (
     EVInput, IDLE_STATUSES, MIN_A, SOLAR_INCREASE_SECONDS,
     SOURCE_IDLE_SECONDS, SOURCE_SETTLE_SECONDS, boiler_preset, plan_ev,
@@ -67,6 +67,7 @@ class EnergyController:
         if self._unsubscribe_states is not None:
             self._unsubscribe_states()
         watched = set(self.entities.values()) | {item["entity"] for item in self.outlet_settings}
+        watched.update(item["power_sensor"] for item in self.outlet_settings if item.get("power_sensor"))
         self._unsubscribe_states = async_track_state_change_event(self.hass, watched, self._request)
 
     @callback
@@ -150,14 +151,21 @@ class EnergyController:
         return value if isfinite(value) else None
 
     def _power(self, key):
-        state = self._state(key)
-        value = self._numeric(key)
-        if state is None or value is None or value < 0:
+        return self._watts(self._state(key))
+
+    def _watts(self, state):
+        if state is None:
+            return None
+        try:
+            value = float(state.state)
+        except (ValueError, TypeError):
+            return None
+        if not isfinite(value) or value < 0:
             return None
         reported = getattr(state, "last_reported", state.last_updated)
         if (dt_util.utcnow() - reported).total_seconds() > self.config["power_max_age_s"]:
             return None
-        factor = {"W": 1, "kW": 1000}.get(state.attributes.get("unit_of_measurement"))
+        factor = POWER_UNITS.get(state.attributes.get("unit_of_measurement"))
         return value * factor if factor is not None else None
 
     def _eps(self):
@@ -278,7 +286,12 @@ class EnergyController:
             state = self.hass.states.get(item["entity"])
             on = {"on": True, "off": False}.get(state.state) if state else None
             age = (now - state.last_changed).total_seconds() if state else 0
-            outlets.append(Outlet(**item, on=on, age=age))
+            meter = item.get("power_sensor")
+            meter_state = self.hass.states.get(meter) if meter else None
+            measured = self._watts(meter_state)
+            if on and measured is not None and getattr(meter_state, "last_reported", meter_state.last_updated) < state.last_changed:
+                measured = None
+            outlets.append(Outlet(**item, on=on, age=age, measured_w=measured))
         return sorted(outlets, key=lambda item: (-item.priority, item.entity))
 
     async def _evaluate_outlets(self, outlets, plan):
@@ -304,11 +317,11 @@ class EnergyController:
             "state": sum(item.on is True for item in outlets),
             "control_enabled": control,
             "reason": reason if outlets else "V nastavení přidej první zásuvku",
-            "priority": self.config["outlet_priority"],
             "ev_priority": self.config["ev_priority"],
             "boiler_priority": self.config["boiler_priority"],
             "outlets": [{
                 "entity": item.entity, "priority": item.priority, "watts": item.watts,
+                "power_sensor": item.power_sensor, "measured_w": item.measured_w,
                 "enabled": item.enabled, "on": item.on, "target_on": item.entity in plan.targets,
                 "error": self._errors.get(item.entity),
             } for item in outlets],
@@ -337,9 +350,9 @@ class EnergyController:
                 )
         if switching:
             if data.source_solar is None:
-                return None, "Poloha Sonoffu není dostupná"
+                return None, "Poloha ATS přepínače není dostupná"
             if not self.config["control_source"]:
-                return None, "Čekám na změnu zdroje Sonoffu"
+                return None, "Čekám na změnu zdroje ATS přepínačem"
             if (self._idle_since is None or now - self._idle_since < SOURCE_IDLE_SECONDS
                     or self._age("session") < SOURCE_IDLE_SECONDS
                     or self._age("ev_status") < SOURCE_IDLE_SECONDS

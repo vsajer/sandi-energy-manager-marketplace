@@ -11,9 +11,11 @@ from homeassistant.core import Context, callback
 from homeassistant.helpers import entity_registry as er
 
 from .const import CONTROL_DEFAULTS, CONTROL_RANGES, DOMAIN, OUTLET_DEFAULTS, OUTLET_RANGES
+from .outlets import valid_outlet_meter
 
 OUTLET_SCHEMA = vol.Schema({
     vol.Required("enabled"): bool,
+    vol.Optional("power_sensor"): str,
     **{vol.Required(key): vol.All(int, vol.Range(min=minimum, max=maximum))
        for key, (minimum, maximum) in OUTLET_RANGES.items()},
 })
@@ -79,7 +81,7 @@ async def write_controls(hass, connection, msg):
         connection.send_error(msg["id"], "invalid_format", "Zkontroluj hodnoty a jejich rozsahy.")
         return
     if settings["control_source"] and not settings["control_ev"]:
-        connection.send_error(msg["id"], "invalid_format", "Přepínání Sonoffu vyžaduje automatiku nabíječky.")
+        connection.send_error(msg["id"], "invalid_format", "Přepínání Grid relé vyžaduje automatiku nabíječky EV.")
         return
 
     controller = entry.runtime_data
@@ -155,6 +157,11 @@ def write_outlet(hass, connection, msg):
 
     updated = [item for item in outlets if item["entity"] != entity]
     if settings is not None:
+        meter = settings.get("power_sensor")
+        if meter and not valid_outlet_meter(hass.states, entry.data, updated, meter,
+                                           (current or {}).get("power_sensor")):
+            connection.send_error(msg["id"], "invalid_format", "Vyber samostatný senzor příkonu ve W nebo kW.")
+            return
         updated.append({**settings, "entity": entity})
     if hass.config_entries.async_update_entry(entry, options={**entry.options, "outlets": updated}):
         entry.runtime_data.apply_outlets(updated)

@@ -17,7 +17,7 @@
           "tariff": "Signál nízkého tarifu HDO",
           "solar_enabled": "Režim FVE",
           "night_enabled": "Režim nízkého tarifu",
-          "source": "Sonoff přepínač zdroje",
+          "source": "ATS přepínač",
           "session": "Spínač nabíjecí relace",
           "current": "Nastavení nabíjecího proudu",
           "boiler": "Termostat bojleru"
@@ -37,7 +37,7 @@
           "tariff": "Signál nízkého tarifu HDO",
           "solar_enabled": "Režim FVE",
           "night_enabled": "Režim nízkého tarifu",
-          "source": "Sonoff přepínač zdroje",
+          "source": "ATS přepínač",
           "session": "Spínač nabíjecí relace",
           "current": "Nastavení nabíjecího proudu",
           "boiler": "Termostat bojleru"
@@ -45,7 +45,7 @@
       }
     },
     "error": {
-      "entities_conflict": "Sonoff a spínač nabíjecí relace musí být dvě různé entity."
+      "entities_conflict": "ATS přepínač a spínač nabíjecí relace musí být dvě různé entity."
     },
     "abort": {
       "already_configured": "Regulátor už je přidaný.",
@@ -59,8 +59,8 @@
         "description": "V náhledu nech všechny volby řízení vypnuté. Priorita +5 je nejvyšší.",
         "data": {
           "control_ev": "Řídit nabíjecí relaci a proud",
-          "control_source": "Automaticky přepínat Sonoff",
-          "sonoff_on_is_solar": "Stav zapnuto na Sonoffu znamená FVE",
+          "control_source": "Přepínání Grid relé",
+          "sonoff_on_is_solar": "ATS přepínač zapnutý = FVE",
           "control_boiler": "Řídit bojler",
           "phases": "Počet fází (1 nebo 3)",
           "solar_max_a": "Maximální proud z FVE (A)",
@@ -69,13 +69,12 @@
           "inverter_limit_w": "Limit EPS (W)",
           "power_max_age_s": "Maximální stáří měření výkonu (s)",
           "control_outlets": "Řídit solární zásuvky",
-          "ev_priority": "Priorita Enyaqu na FVE",
+          "ev_priority": "Nabíječka EV",
           "boiler_priority": "Priorita bojleru",
-          "outlet_priority": "Priorita skupiny zásuvek",
           "boiler_w": "Příkon topného tělesa bojleru (W)"
         },
         "data_description": {
-          "control_source": "Zapni až po ověření poloh Sonoffu a hardwarového blokování obou zdrojů proti propojení."
+          "control_source": "Zapni až po ověření poloh ATS přepínače a hardwarového blokování obou zdrojů proti propojení."
         }
       },
       "init": {
@@ -94,7 +93,8 @@
           "entity": "Zásuvka",
           "enabled": "Zařadit do automatického řízení",
           "priority": "Priorita zásuvky (−5 až +5)",
-          "watts": "Příkon spotřebiče (W)",
+          "watts": "Orientační příkon spotřebiče (W)",
+          "power_sensor": "Senzor aktuálního příkonu",
           "min_on_s": "Minimální doba zapnutí (s)",
           "min_off_s": "Minimální doba vypnutí (s)"
         }
@@ -113,8 +113,9 @@
       }
     },
     "error": {
-      "source_requires_ev": "Pro přepínání Sonoffu musí být povoleno řízení nabíjení.",
-      "outlet_reserved": "Zásuvka už je přidaná nebo slouží k řízení nabíječky či Sonoffu."
+      "source_requires_ev": "Pro přepínání Grid relé musí být povoleno řízení nabíjení.",
+      "outlet_reserved": "Zásuvka už je přidaná nebo slouží k řízení nabíječky či ATS.",
+      "invalid_outlet_meter": "Vyber samostatný senzor příkonu ve W nebo kW."
     }
   }
 }

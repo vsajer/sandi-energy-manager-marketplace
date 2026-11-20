@@ -35,8 +35,9 @@ const layout = `
     button { cursor: pointer; }
     .menu { display: none; background: none; border: 0; border-radius: 50%; padding: 8px; }
     :host([narrow]) .menu { display: inline-flex; }
-    .settings { text-decoration: none; border: 1px solid currentColor; padding: 7px 12px; border-radius: 10px; white-space: nowrap; }
-    button.settings { background: transparent; cursor: pointer; }
+    .page-nav { display: flex; align-items: center; gap: 5px; }
+    .settings { text-decoration: none; padding: 7px 10px; border-radius: 8px; white-space: nowrap; }
+    .settings[aria-current="page"] { background: var(--energy-surface); box-shadow: inset 0 -2px var(--energy-accent); }
     .settings:focus-visible, .menu:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
     main { max-width: 1180px; margin: auto; padding: 20px 18px 34px; }
     .overview { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -89,7 +90,8 @@ const layout = `
     .buttons label { max-width: 180px; }
     .action[aria-pressed="true"] { border-color: var(--energy-accent); color: var(--energy-accent); font-weight: 650; }
     .tuning { scroll-margin-top: 72px; }
-    .tuning summary { cursor: pointer; font-size: 18px; font-weight: 650; }
+    .settings-page .tuning { grid-row: 1; }
+    .meter-picker { margin-top: 12px; }
     .settings-group { margin-top: 15px; }
     .settings-group .form-grid { margin-top: 0; }
     .range-label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
@@ -109,9 +111,12 @@ const layout = `
       <button type="button" class="menu" aria-label="Otevřít postranní nabídku"><ha-icon icon="mdi:menu"></ha-icon></button>
       <h1>Energie domu</h1>
     </div>
-    <button type="button" class="settings open-tuning">Nastavení regulátoru</button>
+    <nav class="page-nav" aria-label="Energie domu">
+      <a class="settings overview-link" href="/sandi-energy" aria-current="page">Přehled</a>
+      <a class="settings settings-link" href="/sandi-energy/nastaveni">Nastavení</a>
+    </nav>
   </header>
-  <main>
+  <main class="overview-page">
     <div class="overview"><h2>Přehled výkonu</h2><span class="mode" data-field="control"></span></div>
     <section class="metrics" aria-label="Přehled výkonu">
       <div class="tile"><ha-icon icon="mdi:solar-power"></ha-icon><span>Výroba FVE</span><strong data-field="pv"></strong></div>
@@ -121,10 +126,11 @@ const layout = `
     </section>
     <div class="detail">
       <section class="card">
-        <div class="panel-heading"><ha-icon icon="mdi:ev-station"></ha-icon><h2>Nabíjení auta</h2></div>
+        <div class="panel-heading"><ha-icon icon="mdi:ev-station"></ha-icon><h2>Nabíječka EV</h2></div>
         <dl>
           <div><dt>Režim</dt><dd data-field="ev_mode"></dd></div>
           <div><dt>Zdroj</dt><dd data-field="actual_source"></dd></div>
+          <div><dt>ATS přepínač</dt><dd data-field="ats_state"></dd></div>
           <div><dt>Nízký tarif HDO</dt><dd data-field="tariff"></dd></div>
           <div><dt>Příkon nabíječky</dt><dd data-field="ev_power"></dd></div>
           <div><dt>Nastavený / cílový proud</dt><dd data-field="amps"></dd></div>
@@ -175,14 +181,24 @@ const layout = `
         </div>
       </section>
       <section class="card full">
+        <div class="panel-heading"><ha-icon icon="mdi:power-socket-eu"></ha-icon><h2>Solární spotřebiče</h2></div>
+        <p class="hint" data-field="outlet_reason"></p>
+        <div class="table-wrap overview-outlets" hidden>
+          <table><thead><tr><th>Spotřebič</th><th>Priorita</th><th>Orientační příkon</th><th>Aktuální příkon</th><th>Stav</th><th>Cíl</th></tr></thead><tbody></tbody></table>
+        </div>
+      </section>
+    </div>
+  </main>
+  <main class="settings-page" hidden>
+    <div class="detail">
+      <section class="card full">
         <div class="outlet-heading">
           <div class="panel-heading"><ha-icon icon="mdi:power-socket-eu"></ha-icon><h2>Solární zásuvky</h2></div>
           <button type="button" class="action primary add-outlet">Přidat zásuvku</button>
         </div>
-        <dl><div><dt>Priorita skupiny</dt><dd data-field="outlet_priority"></dd></div></dl>
-        <p class="hint" data-field="outlet_reason"></p>
-        <div class="table-wrap" hidden>
-          <table><thead><tr><th>Zásuvka</th><th>Priorita</th><th>Příkon</th><th>Stav</th><th>Cíl</th><th>Úpravy</th></tr></thead><tbody></tbody></table>
+        <p class="hint">Každý spotřebič má vlastní prioritu v pořadí s nabíječkou EV a bojlerem.</p>
+        <div class="table-wrap settings-outlets" hidden>
+          <table><thead><tr><th>Spotřebič</th><th>Priorita</th><th>Orientační příkon</th><th>Aktuální příkon</th><th>Stav</th><th>Cíl</th><th>Úpravy</th></tr></thead><tbody></tbody></table>
         </div>
         <form class="outlet-form" hidden>
           <h3 class="form-title"></h3>
@@ -193,10 +209,12 @@ const layout = `
           <div class="form-grid">
             <label><span class="range-label">Priorita <output class="outlet-priority"></output></span>
               <input type="range" name="priority" min="-5" max="5" step="1"></label>
-            <label>Příkon (W) <input type="number" name="watts" min="1" max="20000" required></label>
+            <label>Orientační příkon (W) <input type="number" name="watts" min="1" max="20000" required></label>
             <label>Min. zapnutí (s) <input type="number" name="min_on_s" min="0" max="86400" required></label>
             <label>Min. vypnutí (s) <input type="number" name="min_off_s" min="0" max="86400" required></label>
           </div>
+          <label class="meter-picker">Senzor aktuálního příkonu (volitelný) <select name="power_sensor"></select></label>
+          <p class="hint">Orientační příkon slouží pro start a zastoupí chybějící měření. Čerstvá hodnota ze senzoru se používá pro zapnutý spotřebič.</p>
           <label class="enabled"><input type="checkbox" name="enabled"> Zařadit do automatického řízení FVE</label>
           <div class="form-footer">
             <button type="submit" class="action primary">Uložit zásuvku</button>
@@ -206,17 +224,17 @@ const layout = `
         </form>
         <p class="message outlet-message" role="status"></p>
       </section>
-      <details class="card full tuning">
-        <summary>Limity, priority a aktivace</summary>
+      <section class="card full tuning">
+        <h2>Limity, priority a aktivace</h2>
         <p class="hint">Zápornou prioritu smí regulátor při nedostatku výkonu odstavit. Nula a kladná priorita chrání běžící zátěž před vypnutím kvůli pořadí. Ochrany a konec nízkého tarifu fungují dál.</p>
         <form class="tuning-form" hidden>
           <div class="tuning-fields"></div>
           <p class="hint">Původní automatizace mohou ovládat stejné entity. Ruční povely jsou dostupné při vypnutém automatickém řízení daného zařízení v tomto regulátoru.</p>
-          <p class="hint">Přepínání zdroje povol až po ověření polohy Sonoffu a hardwarového blokování zdrojů.</p>
+          <p class="hint">Přepínání Grid relé povol po ověření polohy ATS a hardwarového blokování zdrojů.</p>
           <div class="form-footer"><button class="action primary" type="submit">Uložit nastavení</button></div>
         </form>
         <p class="message tuning-message" role="status"></p>
-      </details>
+      </section>
       <section class="card full">
         <div class="panel-heading"><ha-icon icon="mdi:lan-connect"></ha-icon><h2>Základní entity</h2></div>
         <p class="hint"><a href="/config/integrations/integration/sandi_energy">Přiřazení entit v nastavení integrace</a></p>
@@ -235,15 +253,14 @@ const outletNumbers = ["priority", "watts", "min_on_s", "min_off_s"];
 const settingGroups = [
   ["Automatické řízení", {
     control_ev: "Řídit nabíjecí relaci a proud",
-    control_source: "Automaticky přepínat Sonoff",
-    sonoff_on_is_solar: "Zapnutý Sonoff znamená FVE",
+    control_source: "Přepínání Grid relé",
+    sonoff_on_is_solar: "ATS přepínač zapnutý = FVE",
     control_boiler: "Řídit bojler",
     control_outlets: "Řídit solární zásuvky",
   }],
   ["Priority", {
-    ev_priority: "Nabíječka na FVE",
+    ev_priority: "Nabíječka EV",
     boiler_priority: "Bojler",
-    outlet_priority: "Skupina zásuvek",
   }],
   ["Příkony a limity", {
     phases: "Počet fází nabíječky",
@@ -267,7 +284,7 @@ const inputRoles = {
   tariff: "Nízký tarif HDO",
   solar_enabled: "Nabíjení z FVE",
   night_enabled: "Nabíjení v nízkém tarifu",
-  source: "Sonoff přepínač zdroje",
+  source: "ATS přepínač",
   session: "Spínač nabíjecí relace",
   current: "Nastavený proud nabíječky",
   boiler: "Termostat bojleru",
@@ -297,8 +314,9 @@ class SandiEnergyPanel extends HTMLElement {
       Array.from(root.querySelectorAll("[data-field]"), (el) => [el.dataset.field, el])
     );
     this.meter = root.querySelector("progress");
-    this.table = root.querySelector(".table-wrap");
-    this.rows = root.querySelector("tbody");
+    this.outletTables = [root.querySelector(".overview-outlets"), root.querySelector(".settings-outlets")];
+    this.pages = [root.querySelector(".overview-page"), root.querySelector(".settings-page")];
+    this.pageLinks = [...root.querySelectorAll(".page-nav a")];
     this.entityRows = root.querySelector(".entity-rows");
     this.form = root.querySelector(".outlet-form");
     this.formTitle = root.querySelector(".form-title");
@@ -308,7 +326,6 @@ class SandiEnergyPanel extends HTMLElement {
     this.picker = root.querySelector(".picker");
     this.controls = this.form.elements;
     this.outletPriority = root.querySelector(".outlet-priority");
-    this.tuning = root.querySelector(".tuning");
     this.tuningForm = root.querySelector(".tuning-form");
     this.tuningFields = root.querySelector(".tuning-fields");
     this.tuningMessage = root.querySelector(".tuning-message");
@@ -319,13 +336,6 @@ class SandiEnergyPanel extends HTMLElement {
     this.deviceButtons = [...root.querySelectorAll("[data-command]")];
     this.deviceButtons.forEach((button) => {
       button.addEventListener("click", () => this.sendDeviceCommand(button.dataset.command));
-    });
-    root.querySelector(".open-tuning").addEventListener("click", () => {
-      this.tuning.open = true;
-      this.tuning.scrollIntoView({ block: "start" });
-    });
-    this.tuning.addEventListener("toggle", () => {
-      if (this.tuning.open && !this.controlSnapshot) this.loadControls();
     });
     this.tuningForm.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -352,6 +362,7 @@ class SandiEnergyPanel extends HTMLElement {
   }
 
   connectedCallback() {
+    this.showPage();
     this.queueUpdate();
   }
 
@@ -360,13 +371,34 @@ class SandiEnergyPanel extends HTMLElement {
   }
 
   set hass(value) {
+    const first = !this.currentHass;
     this.currentHass = value;
+    if (first) this.showPage();
     this.queueUpdate();
   }
 
   set panel(value) {
     this.panelConfig = value?.config;
+    this.showPage();
     this.queueUpdate();
+  }
+
+  set route(value) {
+    this.currentRoute = value;
+    this.showPage();
+  }
+
+  showPage() {
+    const path = this.currentRoute?.path ?? window.location.pathname.slice("/sandi-energy".length);
+    const page = path.split("/").filter(Boolean)[0] === "nastaveni" ? 1 : 0;
+    this.pages.forEach((element, index) => { element.hidden = page !== index; });
+    this.pageLinks.forEach((element, index) => {
+      if (page === index) element.setAttribute("aria-current", "page");
+      else element.removeAttribute("aria-current");
+    });
+    if (page === 1 && this.currentHass && this.panelConfig && !this.controlSnapshot && !this.loadingControls) {
+      this.loadControls();
+    }
   }
 
   setMessage(text, error = false) {
@@ -392,6 +424,7 @@ class SandiEnergyPanel extends HTMLElement {
       this.selectedOutlet = this.settings.outlets.find((item) => item.entity === entity) ?? null;
       if (entity && !this.selectedOutlet) throw new Error("Zásuvka už není v seznamu.");
       const fields = this.selectedOutlet ?? this.settings.defaults;
+      this.fillMeterPicker(fields.power_sensor);
       for (const key of outletNumbers) this.controls[key].value = fields[key];
       this.outletPriority.value = priorityLabel(fields.priority);
       this.controls.enabled.checked = fields.enabled;
@@ -414,6 +447,7 @@ class SandiEnergyPanel extends HTMLElement {
   }
 
   async loadControls() {
+    this.loadingControls = true;
     this.report(this.tuningMessage, "Načítám nastavení…");
     try {
       const settings = await this.callSettings("sandi_energy/controls");
@@ -421,6 +455,8 @@ class SandiEnergyPanel extends HTMLElement {
       this.report(this.tuningMessage, "");
     } catch (err) {
       this.report(this.tuningMessage, err.message || "Nastavení se nepodařilo načíst.", true);
+    } finally {
+      this.loadingControls = false;
     }
   }
 
@@ -581,6 +617,26 @@ class SandiEnergyPanel extends HTMLElement {
     return this.currentHass?.states[entity]?.attributes.friendly_name || entity;
   }
 
+  fillMeterPicker(previous) {
+    const select = this.controls.power_sensor;
+    const entities = this.panelConfig.entities;
+    const excluded = new Set([entities.pv, entities.eps, entities.overload, entities.ev_power,
+      ...this.settings.outlets.filter((item) => item.entity !== this.selectedOutlet?.entity).map((item) => item.power_sensor)]);
+    const list = Object.entries(this.currentHass.states)
+      .filter(([id, state]) => id.startsWith("sensor.") && !excluded.has(id)
+        && ["W", "kW"].includes(state.attributes.unit_of_measurement))
+      .map(([id]) => [id, this.outletLabel(id)])
+      .sort((left, right) => left[1].localeCompare(right[1], "cs") || left[0].localeCompare(right[0]));
+    if (previous && !list.some(([id]) => id === previous)) list.unshift([previous, this.outletLabel(previous)]);
+    select.replaceChildren(...[["", "Pouze orientační příkon"], ...list].map(([id, name]) => {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = id && name !== id ? name + " · " + id : name;
+      return option;
+    }));
+    select.value = previous ?? "";
+  }
+
   fillPicker() {
     const select = this.controls.entity;
     const previous = select.value;
@@ -622,6 +678,7 @@ class SandiEnergyPanel extends HTMLElement {
       ...Object.fromEntries(outletNumbers.map((key) => [key, this.controls[key].valueAsNumber])),
       enabled: this.controls.enabled.checked,
     };
+    if (settings && this.controls.power_sensor.value) settings.power_sensor = this.controls.power_sensor.value;
     this.settingsBusy = true;
     this.addOutlet.disabled = true;
     this.setMessage(remove ? "Odebírám zásuvku…" : "Ukládám nastavení…");
@@ -674,6 +731,7 @@ class SandiEnergyPanel extends HTMLElement {
       eta: quantity(states[entities.eta]?.state, "min"),
       ev_mode: stateLabel(states[diagnostics.ev]?.state, evModes),
       actual_source: ev.actual_source ?? "—",
+      ats_state: stateLabel(states[entities.source]?.state, { on: "Zapnutý", off: "Vypnutý" }),
       tariff: stateLabel(tariff, { on: "Aktivní", off: "Vypnutý" }),
       ev_power: quantity(ev.ev_w, "W"),
       amps: currentAndTarget.join(" / ") + (currentAndTarget.every((item) => item === "—") ? "" : " A"),
@@ -689,7 +747,6 @@ class SandiEnergyPanel extends HTMLElement {
       boiler_reason: boiler.reason ?? "",
       boiler_error: boiler.last_error ?? "",
       boiler_manual: boiler.control_enabled ? "Bojler řídí automatika podle ETA baterie a EPS." : "",
-      outlet_priority: priorityLabel(outlets.priority),
       outlet_reason: outlets.reason ?? "",
     };
     for (const [key, value] of Object.entries(values)) {
@@ -743,28 +800,30 @@ class SandiEnergyPanel extends HTMLElement {
       states[outlet.entity]?.attributes.friendly_name ?? outlet.entity,
       priorityLabel(outlet.priority),
       quantity(outlet.watts, "W"),
+      outlet.measured_w != null ? quantity(outlet.measured_w, "W") : outlet.power_sensor ? "Nedostupný" : "—",
       outlet.on == null ? "Nedostupná" : outlet.on ? "Zapnutá" : "Vypnutá",
       outlet.error || (!outlet.enabled ? "Ručně" : outlet.target_on ? "Zapnout" : "Vypnout"),
     ]);
     const signature = JSON.stringify(labels);
     if (signature === this.outletSignature) return;
     this.outletSignature = signature;
-    this.table.hidden = !labels.length;
-    this.rows.replaceChildren(...labels.map(([id, ...row]) => {
-      const element = document.createElement("tr");
-      for (const value of row) {
-        const cell = element.insertCell();
-        cell.textContent = String(value);
-      }
-      const edit = document.createElement("button");
-      edit.type = "button";
-      edit.className = "action";
-      edit.textContent = "Upravit";
-      edit.setAttribute("aria-label", "Upravit " + row[0]);
-      edit.addEventListener("click", () => this.openOutlet(id));
-      element.insertCell().append(edit);
-      return element;
-    }));
+    this.outletTables.forEach((table, page) => {
+      table.hidden = !labels.length;
+      table.querySelector("tbody").replaceChildren(...labels.map(([id, ...row]) => {
+        const element = document.createElement("tr");
+        for (const value of row) element.insertCell().textContent = String(value);
+        if (page === 1) {
+          const edit = document.createElement("button");
+          edit.type = "button";
+          edit.className = "action";
+          edit.textContent = "Upravit";
+          edit.setAttribute("aria-label", "Upravit " + row[0]);
+          edit.addEventListener("click", () => this.openOutlet(id));
+          element.insertCell().append(edit);
+        }
+        return element;
+      }));
+    });
   }
 }
 

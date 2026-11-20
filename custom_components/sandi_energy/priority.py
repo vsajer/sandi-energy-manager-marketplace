@@ -1,11 +1,10 @@
 """Convert the previous ranking without making formerly shedable loads protected."""
 
-from .const import GROUP_PRIORITIES
-
-
 def migrate_priorities(options):
     updated = dict(options)
-    legacy_groups = {key: options.get(key, default) for key, default in zip(GROUP_PRIORITIES, (10, 20, 30))}
+    legacy_groups = {key: options.get(key, default) for key, default in (
+        ("ev_priority", 10), ("boiler_priority", 20), ("outlet_priority", 30),
+    )}
     group_ranks = _negative_ranks(legacy_groups.values())
     updated.update({key: group_ranks[value] for key, value in legacy_groups.items()})
     if "outlets" in options:

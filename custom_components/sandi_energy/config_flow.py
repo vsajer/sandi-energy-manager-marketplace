@@ -10,6 +10,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig
 
 from .const import CONTROL_DEFAULTS, CONTROL_RANGES, DOMAIN, ENTITY_DOMAINS, OUTLET_DEFAULTS, OUTLET_RANGES
+from .outlets import valid_outlet_meter
 
 
 def entity_schema(values: dict):
@@ -32,7 +33,7 @@ class SandiConfigFlow(ConfigFlow, domain=DOMAIN):
     """Install one controller for the household."""
 
     VERSION = 1
-    MINOR_VERSION = 2
+    MINOR_VERSION = 3
 
     async def async_step_user(self, user_input=None):
         await self.async_set_unique_id(DOMAIN)
@@ -114,18 +115,23 @@ class SandiOptionsFlow(OptionsFlowWithReload):
     async def async_step_outlet(self, user_input=None):
         errors = {}
         other = [x for x in self.config_entry.options.get("outlets", []) if x["entity"] != self._selected]
+        current = next((x for x in self._outlets if x["entity"] == self._selected), {})
         if user_input is not None:
             reserved = {self.config_entry.data["session"], self.config_entry.data["source"]}
+            meter = user_input.get("power_sensor")
             if user_input["entity"] in reserved | {x["entity"] for x in other}:
                 errors["entity"] = "outlet_reserved"
+            elif meter and not valid_outlet_meter(self.hass.states, self.config_entry.data, other,
+                                                  meter, current.get("power_sensor")):
+                errors["power_sensor"] = "invalid_outlet_meter"
             else:
                 return self._save_outlets([*other, user_input])
 
-        current = next((x for x in self._outlets if x["entity"] == self._selected), {})
         values = {**current, **(user_input or {})}
         schema = vol.Schema({
             vol.Required("entity"): EntitySelector(EntitySelectorConfig(domain="switch")),
             vol.Required("enabled", default=True): bool,
+            vol.Optional("power_sensor"): EntitySelector(EntitySelectorConfig(domain="sensor")),
             **{vol.Required(key, default=OUTLET_DEFAULTS[key]): vol.All(
                 vol.Coerce(int), vol.Range(min=minimum, max=maximum)
             ) for key, (minimum, maximum) in OUTLET_RANGES.items()},
