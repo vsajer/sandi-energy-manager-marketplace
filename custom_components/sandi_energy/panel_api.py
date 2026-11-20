@@ -81,7 +81,7 @@ async def write_controls(hass, connection, msg):
         connection.send_error(msg["id"], "invalid_format", "Zkontroluj hodnoty a jejich rozsahy.")
         return
     if settings["control_source"] and not settings["control_ev"]:
-        connection.send_error(msg["id"], "invalid_format", "Přepínání Grid relé vyžaduje automatiku nabíječky EV.")
+        connection.send_error(msg["id"], "invalid_format", "Přepínání přes IN Grid relé vyžaduje automatiku nabíječky EV.")
         return
 
     controller = entry.runtime_data

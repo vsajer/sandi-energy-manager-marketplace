@@ -59,7 +59,7 @@
         "description": "V náhledu nech všechny volby řízení vypnuté. Priorita +5 je nejvyšší.",
         "data": {
           "control_ev": "Řídit nabíjecí relaci a proud",
-          "control_source": "Přepínání Grid relé",
+          "control_source": "IN Grid relé",
           "sonoff_on_is_solar": "ATS přepínač zapnutý = FVE",
           "control_boiler": "Řídit bojler",
           "phases": "Počet fází (1 nebo 3)",
@@ -113,7 +113,7 @@
       }
     },
     "error": {
-      "source_requires_ev": "Pro přepínání Grid relé musí být povoleno řízení nabíjení.",
+      "source_requires_ev": "Pro přepínání přes IN Grid relé musí být povoleno řízení nabíjení.",
       "outlet_reserved": "Zásuvka už je přidaná nebo slouží k řízení nabíječky či ATS.",
       "invalid_outlet_meter": "Vyber samostatný senzor příkonu ve W nebo kW."
     }

@@ -230,7 +230,7 @@ const layout = `
         <form class="tuning-form" hidden>
           <div class="tuning-fields"></div>
           <p class="hint">Původní automatizace mohou ovládat stejné entity. Ruční povely jsou dostupné při vypnutém automatickém řízení daného zařízení v tomto regulátoru.</p>
-          <p class="hint">Přepínání Grid relé povol po ověření polohy ATS a hardwarového blokování zdrojů.</p>
+          <p class="hint">Automatické přepínání přes IN Grid relé povol po ověření polohy ATS a hardwarového blokování zdrojů.</p>
           <div class="form-footer"><button class="action primary" type="submit">Uložit nastavení</button></div>
         </form>
         <p class="message tuning-message" role="status"></p>
@@ -253,7 +253,7 @@ const outletNumbers = ["priority", "watts", "min_on_s", "min_off_s"];
 const settingGroups = [
   ["Automatické řízení", {
     control_ev: "Řídit nabíjecí relaci a proud",
-    control_source: "Přepínání Grid relé",
+    control_source: "IN Grid relé",
     sonoff_on_is_solar: "ATS přepínač zapnutý = FVE",
     control_boiler: "Řídit bojler",
     control_outlets: "Řídit solární zásuvky",
@@ -389,7 +389,7 @@ class SandiEnergyPanel extends HTMLElement {
   }
 
   showPage() {
-    const path = this.currentRoute?.path ?? window.location.pathname.slice("/sandi-energy".length);
+    const path = this.currentRoute?.path || window.location.pathname.slice("/sandi-energy".length);
     const page = path.split("/").filter(Boolean)[0] === "nastaveni" ? 1 : 0;
     this.pages.forEach((element, index) => { element.hidden = page !== index; });
     this.pageLinks.forEach((element, index) => {
